@@ -90,4 +90,14 @@ st.dataframe(
 # 榜單列表 (保留原本的詳細清單供查詢)
 # ==========================================
 df_100 = pd.DataFrame({'號碼': range(1, 40), '短線次數': s_100.values, '心理分數': psy_scores.values, '🌟 綜合評分': short_score.values})
-df_100 = df_100.sort_values(by=['🌟 綜合評分', '短線次數'], ascending=[False, False]).set_index(pd.Index(range(1, 40
+
+# 我把這裡拆成兩行，這樣就不怕太長被截斷了！
+df_100 = df_100.sort_values(by=['🌟 綜合評分', '短線次數'], ascending=[False, False])
+df_100 = df_100.set_index(pd.Index(range(1, 40), name='名次'))
+
+st.markdown("---")
+st.header("📋 詳細號碼戰力排行榜")
+with st.expander("點擊展開/收合：查看 1~39 名完整清單"):
+    st.dataframe(df_100.style.background_gradient(cmap='YlOrRd', subset=['🌟 綜合評分']), height=400, use_container_width=True)
+
+st.markdown("*(本系統為量化數據教學使用，請理性參考)*")
