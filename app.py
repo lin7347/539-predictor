@@ -2,38 +2,14 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-# --- 策略模組：39碼全排行 ---
-def get_full_ranking_short_term(history_df, lookback=100):
-    # 短線邏輯：找熱門。出現次數越多，排名越前面 (大到小排序)
-    recent_data = history_df.tail(lookback)
-    all_numbers = recent_data[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
-    counts = pd.Series(all_numbers).value_counts()
-    full_counts = pd.Series(0, index=np.arange(1, 40)).add(counts, fill_value=0)
-    
-    # 依照出現次數降冪排列
-    ranked_series = full_counts.sort_values(ascending=False)
-    return ranked_series.index.astype(int).tolist(), ranked_series.values.astype(int).tolist()
-
-def get_full_ranking_long_term(history_df, lookback=200):
-    # 長線邏輯：找冷門補洞。出現次數越少，排名越前面 (小到大排序)
-    recent_data = history_df.tail(lookback)
-    all_numbers = recent_data[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
-    counts = pd.Series(all_numbers).value_counts()
-    full_counts = pd.Series(0, index=np.arange(1, 40)).add(counts, fill_value=0)
-    
-    # 依照出現次數升冪排列
-    ranked_series = full_counts.sort_values(ascending=True)
-    return ranked_series.index.astype(int).tolist(), ranked_series.values.astype(int).tolist()
-
 # --- 網頁介面設計 ---
-st.set_page_config(page_title="539 量化雷達系統", layout="wide")
-st.title("🎯 539 量化雷達系統 (39碼全排行)")
+st.set_page_config(page_title="539 量化雷達系統 v2.0", layout="wide")
+st.title("🎯 539 量化雷達系統 v2.0 (結合反市場心理學)")
 
 # 讀取與清洗資料庫
 @st.cache_data
 def load_data():
     df = pd.read_excel('539.xlsx')
-    # 清洗欄位名稱
     rename_dict = {
         'Date (開獎日期)': 'Date',
         'Issue (期數)': 'Issue',
@@ -58,7 +34,7 @@ n3 = st.sidebar.number_input("號碼 3", min_value=1, max_value=39, value=3)
 n4 = st.sidebar.number_input("號碼 4", min_value=1, max_value=39, value=4)
 n5 = st.sidebar.number_input("號碼 5 (最大)", min_value=1, max_value=39, value=5)
 
-if st.sidebar.button("🚀 加入數據並預測明日"):
+if st.sidebar.button("🚀 加入數據並重新計算"):
     new_data = pd.DataFrame({
         'Date': [new_date], 'Issue': [new_issue],
         'N1': [n1], 'N2': [n2], 'N3': [n3], 'N4': [n4], 'N5': [n5]
@@ -66,38 +42,61 @@ if st.sidebar.button("🚀 加入數據並預測明日"):
     df = pd.concat([df, new_data], ignore_index=True)
     st.sidebar.success(f"✅ 已成功加入最新開獎紀錄！")
 
-# 執行策略排名計算
-short_nums, short_freq = get_full_ranking_short_term(df)
-long_nums, long_freq = get_full_ranking_long_term(df)
+# --- 策略核心運算引擎 ---
+def get_stats(history_df):
+    # 短線動能 (100期)
+    nums_100 = history_df.tail(100)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
+    s_100 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_100).value_counts(), fill_value=0).astype(int)
+    
+    # 長線補洞 (200期)
+    nums_200 = history_df.tail(200)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
+    s_200 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_200).value_counts(), fill_value=0).astype(int)
+    return s_100, s_200
 
-# 建立 39 碼全排行資料表
-ranking_df = pd.DataFrame({
-    '推薦名次': range(1, 40),
-    '🔥短線號碼 (追熱)': short_nums,
-    '(近100期開出次數)': short_freq,
-    '❄️長線號碼 (補洞)': long_nums,
-    '(近200期開出次數)': long_freq
+def get_psychological_scores():
+    scores = {}
+    for num in range(1, 40):
+        score = 0
+        if num > 31: score += 2  # 避開生日牌 (+2分)
+        if num % 10 == 4: score += 1  # 避開忌諱尾數 (+1分)
+        if num <= 31 and (num % 10 in [6, 8] or num // 10 in [6, 8]): score -= 1 # 散戶最愛熱門號 (-1分)
+        scores[num] = score
+    return pd.Series(scores)
+
+s_100, s_200 = get_stats(df)
+psy_scores = get_psychological_scores()
+
+# 建立主資料表
+master_df = pd.DataFrame({
+    '號碼': range(1, 40),
+    '🔥 短線次數 (動能)': s_100.values,
+    '❄️ 長線次數 (補洞)': s_200.values,
+    '🧠 反市場心理分數': psy_scores.values
 })
 
-# 將「推薦名次」設為 Index，讓表格更好看
-ranking_df = ranking_df.set_index('推薦名次')
+# 計算【終極期望值分數】：短線動能次數 + (心理分數 * 權重倍數)
+master_df['🌟 綜合期望值評分'] = master_df['🔥 短線次數 (動能)'] + (master_df['🧠 反市場心理分數'] * 2)
 
-# 顯示結果
+# 依照綜合評分由高到低排序，產出最終排行榜
+final_df = master_df.sort_values(by=['🌟 綜合期望值評分', '🔥 短線次數 (動能)'], ascending=[False, False])
+final_df.insert(0, '推薦名次', range(1, 40))
+final_df = final_df.set_index('推薦名次')
+
+# --- 顯示網頁結果 ---
 st.markdown("---")
-st.header("🏆 39 碼終極勝率排行榜")
-st.markdown("在這裡，你可以清楚看到每個號碼的「潛力」。**排在最上面的，就是系統認為最有可能開出的號碼；排在最下面的，可以考慮作為『刪牌』的參考。**")
+st.header("🏆 39 碼高期望值綜合排行榜")
+st.markdown("本排行榜不僅考量了**『號碼開出的機率』**，更加入了**『散戶心理學』**的籌碼分析。排在越前面的號碼，代表它近期很常開出，而且**全台灣沒什麼人想買它**。一旦開出，你能抱走大獎的機率極高！")
 
-# 使用 columns 讓畫面並排
-col1, col2 = st.columns([1, 2])
+col1, col2 = st.columns([1, 2.5])
 
 with col1:
-    st.info("💡 **榜單解讀指南：**\n\n"
-            "**1. 短線榜首：** 近期氣勢最強的號碼，適合喜歡『順勢操作』的你。\n\n"
-            "**2. 長線榜首：** 沉寂最久、隨時可能反彈的號碼，適合喜歡『逆勢摸底』的你。\n\n"
-            "**3. 殺牌區 (第35~39名)：** 兩邊策略都不看好的墊底號碼，建議可以大膽剔除，省下包牌成本！")
+    st.success("🧠 **心理分數說明：**\n\n"
+            "🟢 **正分 (>0)：** \n號碼大於31、或是尾數4。散戶不愛買，籌碼乾淨，中獎期望值極高。\n\n"
+            "🔴 **負分 (<0)：** \n號碼小於31且包含6或8。全台灣人都在買的生日幸運號碼，一旦中獎要跟一堆人平分，期望值低。\n\n"
+            "💡 **選號建議：** \n直接從排行榜**前 5 名**挑選號碼組合，避開最後 5 名的『地雷擁擠區』。")
 
 with col2:
-    # 顯示漂亮的 DataFrame，並設定高度讓他可以上下捲動查看全部 39 個
-    st.dataframe(ranking_df, height=600, use_container_width=True)
+    # 將特定欄位上色，讓表格更容易閱讀
+    st.dataframe(final_df.style.background_gradient(cmap='YlOrRd', subset=['🌟 綜合期望值評分']), height=600, use_container_width=True)
 
 st.markdown("*(本系統為量化數據教學使用，請理性參考)*")
