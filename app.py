@@ -30,7 +30,7 @@ st.title("🎯 539 量化預測系統 v1.0")
 # 讀取資料庫
 @st.cache_data
 def load_data():
-    df = pd.read_csv('539_history.csv')
+    df = pd.read_excel('539.xlsx')
     return df
 
 df = load_data()
@@ -75,5 +75,6 @@ with col2:
     preds_long = strategy_long_term_gap(df)
     st.write(f"**近200期冷門號碼:** {preds_long}")
     st.write(f"**推薦包牌號碼:** {preds_long}")
+
 
 st.markdown("*(本系統為量化數據教學使用，請理性參考)*")
