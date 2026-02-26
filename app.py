@@ -27,17 +27,27 @@ df = st.session_state.history_df
 st.sidebar.header("📝 輸入今日最新開獎號碼")
 new_date = st.sidebar.text_input("開獎日期 (YYYY-MM-DD)", "2026-02-25")
 new_issue = st.sidebar.number_input("期數", min_value=113000, value=115048, step=1)
-n1 = st.sidebar.number_input("號碼 1 (最小)", min_value=1, max_value=39, value=1)
+st.sidebar.markdown("*(輸入順序不拘，系統會自動排序)*")
+n1 = st.sidebar.number_input("號碼 1", min_value=1, max_value=39, value=1)
 n2 = st.sidebar.number_input("號碼 2", min_value=1, max_value=39, value=2)
 n3 = st.sidebar.number_input("號碼 3", min_value=1, max_value=39, value=3)
 n4 = st.sidebar.number_input("號碼 4", min_value=1, max_value=39, value=4)
-n5 = st.sidebar.number_input("號碼 5 (最大)", min_value=1, max_value=39, value=5)
+n5 = st.sidebar.number_input("號碼 5", min_value=1, max_value=39, value=5)
 
 if st.sidebar.button("🚀 加入數據並重新計算"):
+    # 防呆 1：自動幫使用者由小到大排序
+    sorted_nums = sorted([n1, n2, n3, n4, n5])
+    
     new_data = pd.DataFrame({
         'Date': [new_date], 'Issue': [new_issue],
-        'N1': [n1], 'N2': [n2], 'N3': [n3], 'N4': [n4], 'N5': [n5]
+        'N1': [sorted_nums[0]], 'N2': [sorted_nums[1]], 
+        'N3': [sorted_nums[2]], 'N4': [sorted_nums[3]], 
+        'N5': [sorted_nums[4]]
     })
+    
+    # 防呆 2：如果輸入的期數已經存在，就刪除舊的，確保資料不重複
+    st.session_state.history_df = st.session_state.history_df[st.session_state.history_df['Issue'] != new_issue]
+    
     st.session_state.history_df = pd.concat([st.session_state.history_df, new_data], ignore_index=True)
     st.sidebar.success(f"✅ 已成功加入最新紀錄！(最新期數：{new_issue})")
     st.rerun()
@@ -46,15 +56,19 @@ if st.sidebar.button("🚀 加入數據並重新計算"):
 # ⏳ 主畫面：時光機選擇器 (回放歷史)
 # ==========================================
 st.markdown("---")
-issue_list = (df['Issue'].astype(str) + " (" + df['Date'].astype(str) + ")").tolist()
-issue_list.reverse()
 
-selected_display = st.selectbox("⏳ **時光機：選擇你要分析的基準日 (預設為最新一期)**", issue_list)
+# 防呆 3：改用 DataFrame 的唯一索引 (Index) 當作時光機的鑰匙
+options = df.index.tolist()
+options.reverse()
 
-selected_issue_num = int(selected_display.split(" ")[0])
-selected_idx = df[df['Issue'] == selected_issue_num].index[0]
+def format_option(idx):
+    row = df.loc[idx]
+    return f"期數 {row['Issue']} ({row['Date']})"
+    
+selected_idx = st.selectbox("⏳ **時光機：選擇你要分析的基準日 (預設為最新一期)**", options, format_func=format_option)
 
-historical_df = df.iloc[:selected_idx + 1]
+# 擷取歷史資料 (改用 loc 絕對定位)
+historical_df = df.loc[:selected_idx]
 
 # ==========================================
 # 🧠 核心運算：以「選定日」為基準進行計算
@@ -68,11 +82,11 @@ s_200 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_200).value_count
 target_draw = historical_df.iloc[-1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
 target_date = historical_df.iloc[-1]['Date']
 
-# 💡 偷看「下一期」的真實答案 (如果有的話)
+# 💡 偷看「下一期」的真實答案
 if selected_idx + 1 < len(df):
-    next_draw = df.iloc[selected_idx + 1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
+    next_draw = df.loc[selected_idx + 1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
 else:
-    next_draw = [] # 如果是最新的，代表明天還沒開獎
+    next_draw = []
 
 extended_draw = [0] + target_draw + [40]
 
@@ -118,7 +132,6 @@ for n in range(1, 40):
     elif n in short_picks: status = "🔥 短線順勢 (+1/-1)"
     else: status = "⚖️ 中立觀望"
     
-    # 計算是否命中
     if next_draw:
         next_status = "✅ 命中" if n in next_draw else ""
     else:
@@ -137,7 +150,7 @@ df_full_39 = pd.DataFrame(full_39_data).set_index("號碼")
 
 # --- 網頁顯示 ---
 st.markdown("---")
-st.markdown(f"### 🎯 分析基準日：{target_date} (期數 {selected_issue_num}) | 開出號碼： `{target_draw}`")
+st.markdown(f"### 🎯 分析基準日：{target_date} (期數 {df.loc[selected_idx, 'Issue']}) | 開出號碼： `{target_draw}`")
 
 col1, col2 = st.columns([1, 2.5])
 
@@ -159,7 +172,6 @@ with col1:
 with col2:
     st.header("📋 39 碼全解析雷達表 (歷史 + 空間 + 實盤驗證)")
     
-    # 設定各種欄位的專屬顏色
     def color_status(val):
         if isinstance(val, str):
             if '🌟' in val: return 'background-color: #d4edda; color: #155724; font-weight: bold'
