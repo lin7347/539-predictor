@@ -21,7 +21,7 @@ def get_google_sheet():
     creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     client = gspread.authorize(creds)
     # 打開名叫 539 的試算表，並選擇第一個分頁
-    sheet = client.open("539").sheet1
+    sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1PrG36Oebngqhm7DrhEUNpfTtSk8k50jdAo2069aBJw8/edit?gid=978302798#gid=978302798").sheet1
     return sheet
 
 @st.cache_data(ttl=600) # 快取 10 分鐘，避免頻繁讀取雲端
@@ -214,3 +214,4 @@ with col2:
     )
 
 st.markdown("*(本系統為量化數據教學使用，請理性參考)*")
+
