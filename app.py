@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-st.set_page_config(page_title="539 量化雷達 歷史回放版", layout="wide")
-st.title("🎯 539 量化雷達 歷史回放版 (空間型態 + 時光機)")
+st.set_page_config(page_title="539 量化雷達 實盤對答案版", layout="wide")
+st.title("🎯 539 量化雷達 實盤對答案版 (空間型態 + 時光機)")
 
 @st.cache_data
 def load_data():
@@ -46,33 +46,34 @@ if st.sidebar.button("🚀 加入數據並重新計算"):
 # ⏳ 主畫面：時光機選擇器 (回放歷史)
 # ==========================================
 st.markdown("---")
-# 製作下拉選單清單 (期數 + 日期，並反轉讓最新的在最上面)
 issue_list = (df['Issue'].astype(str) + " (" + df['Date'].astype(str) + ")").tolist()
 issue_list.reverse()
 
-# 讓使用者選擇要分析哪一期
 selected_display = st.selectbox("⏳ **時光機：選擇你要分析的基準日 (預設為最新一期)**", issue_list)
 
-# 找出使用者選擇的那一期的 Index
 selected_issue_num = int(selected_display.split(" ")[0])
 selected_idx = df[df['Issue'] == selected_issue_num].index[0]
 
-# 擷取「選定日」以前的所有歷史資料，避免偷看到未來的數據！
 historical_df = df.iloc[:selected_idx + 1]
 
 # ==========================================
 # 🧠 核心運算：以「選定日」為基準進行計算
 # ==========================================
-# 1. 計算選定日當下的 100/200 期歷史統計
 nums_100 = historical_df.tail(100)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
 s_100 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_100).value_counts(), fill_value=0).astype(int)
 
 nums_200 = historical_df.tail(200)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
 s_200 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_200).value_counts(), fill_value=0).astype(int)
 
-# 2. 空間型態演算法 (使用選定日開出的號碼)
 target_draw = historical_df.iloc[-1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
 target_date = historical_df.iloc[-1]['Date']
+
+# 💡 偷看「下一期」的真實答案 (如果有的話)
+if selected_idx + 1 < len(df):
+    next_draw = df.iloc[selected_idx + 1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
+else:
+    next_draw = [] # 如果是最新的，代表明天還沒開獎
+
 extended_draw = [0] + target_draw + [40]
 
 death_seas = []
@@ -117,9 +118,17 @@ for n in range(1, 40):
     elif n in short_picks: status = "🔥 短線順勢 (+1/-1)"
     else: status = "⚖️ 中立觀望"
     
+    # 計算是否命中
+    if next_draw:
+        next_status = "✅ 命中" if n in next_draw else ""
+    else:
+        next_status = "⏳ 尚未開獎"
+    
     full_39_data.append({
         "號碼": n, 
+        "📍 本期基準號碼": "🔵 開出" if n in target_draw else "",
         "空間狀態判定": status,
+        "🔮 下一期實際開出": next_status,
         "🔥 100期開出次數": s_100[n],
         "❄️ 200期開出次數": s_200[n]
     })
@@ -148,20 +157,32 @@ with col1:
     st.write(f"🥪 必補夾心: {sandwiches}")
 
 with col2:
-    st.header("📋 39 碼全解析雷達表 (歷史 + 空間)")
+    st.header("📋 39 碼全解析雷達表 (歷史 + 空間 + 實盤驗證)")
     
+    # 設定各種欄位的專屬顏色
     def color_status(val):
         if isinstance(val, str):
             if '🌟' in val: return 'background-color: #d4edda; color: #155724; font-weight: bold'
             elif '💀' in val: return 'background-color: #f8d7da; color: #721c24'
             elif '🔥' in val or '🎯' in val or '🥪' in val: return 'background-color: #fff3cd; color: #856404'
         return ''
+        
+    def color_base(val):
+        if '🔵' in str(val): return 'background-color: #cce5ff; color: #004085; font-weight: bold'
+        return ''
+        
+    def color_next(val):
+        if '✅' in str(val): return 'background-color: #28a745; color: white; font-weight: bold'
+        elif '⏳' in str(val): return 'color: #6c757d; font-style: italic'
+        return ''
     
     st.dataframe(
         df_full_39.style.map(color_status, subset=['空間狀態判定'])
+                        .map(color_base, subset=['📍 本期基準號碼'])
+                        .map(color_next, subset=['🔮 下一期實際開出'])
                         .background_gradient(cmap='YlOrRd', subset=['🔥 100期開出次數'])
                         .background_gradient(cmap='PuBu', subset=['❄️ 200期開出次數']), 
-        height=600, use_container_width=True
+        height=650, use_container_width=True
     )
 
 st.markdown("*(本系統為量化數據教學使用，請理性參考)*")
