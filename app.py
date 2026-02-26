@@ -1,13 +1,36 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import gspread
+from google.oauth2.service_account import Credentials
+import json
 
-st.set_page_config(page_title="539 量化雷達 實盤對答案版", layout="wide")
-st.title("🎯 539 量化雷達 實盤對答案版 (空間型態 + 時光機)")
+st.set_page_config(page_title="539 量化雷達 雲端資料庫版", layout="wide")
+st.title("🎯 539 量化雷達 v8.0 (全端雲端資料庫版)")
 
-@st.cache_data
+# ==========================================
+# 🔗 連接 Google Sheets 資料庫
+# ==========================================
+def get_google_sheet():
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    # 從 Streamlit 金庫讀取你的鑰匙
+    creds_dict = json.loads(st.secrets["gcp_json"])
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    client = gspread.authorize(creds)
+    # 打開名叫 539 的試算表，並選擇第一個分頁
+    sheet = client.open("539").sheet1
+    return sheet
+
+@st.cache_data(ttl=600) # 快取 10 分鐘，避免頻繁讀取雲端
 def load_data():
-    df = pd.read_excel('539.xlsx')
+    sheet = get_google_sheet()
+    data = sheet.get_all_records()
+    df = pd.DataFrame(data)
+    
+    # 統一欄位名稱
     rename_dict = {
         'Date (開獎日期)': 'Date', 'Issue (期數)': 'Issue',
         'N1 (號碼1)': 'N1', 'N2 (號碼2)': 'N2', 'N3 (號碼3)': 'N3',
@@ -16,13 +39,11 @@ def load_data():
     df = df.rename(columns=rename_dict)
     return df
 
-if 'history_df' not in st.session_state:
-    st.session_state.history_df = load_data()
-
-df = st.session_state.history_df
+# 直接從雲端抓取最新資料
+df = load_data()
 
 # ==========================================
-# 📝 側邊欄：新增數據區
+# 📝 側邊欄：寫入雲端資料庫
 # ==========================================
 st.sidebar.header("📝 輸入今日最新開獎號碼")
 new_date = st.sidebar.text_input("開獎日期 (YYYY-MM-DD)", "2026-02-25")
@@ -34,30 +55,28 @@ n3 = st.sidebar.number_input("號碼 3", min_value=1, max_value=39, value=3)
 n4 = st.sidebar.number_input("號碼 4", min_value=1, max_value=39, value=4)
 n5 = st.sidebar.number_input("號碼 5", min_value=1, max_value=39, value=5)
 
-if st.sidebar.button("🚀 加入數據並重新計算"):
-    # 防呆 1：自動幫使用者由小到大排序
-    sorted_nums = sorted([n1, n2, n3, n4, n5])
-    
-    new_data = pd.DataFrame({
-        'Date': [new_date], 'Issue': [new_issue],
-        'N1': [sorted_nums[0]], 'N2': [sorted_nums[1]], 
-        'N3': [sorted_nums[2]], 'N4': [sorted_nums[3]], 
-        'N5': [sorted_nums[4]]
-    })
-    
-    # 防呆 2：如果輸入的期數已經存在，就刪除舊的，確保資料不重複
-    st.session_state.history_df = st.session_state.history_df[st.session_state.history_df['Issue'] != new_issue]
-    
-    st.session_state.history_df = pd.concat([st.session_state.history_df, new_data], ignore_index=True)
-    st.sidebar.success(f"✅ 已成功加入最新紀錄！(最新期數：{new_issue})")
-    st.rerun()
+if st.sidebar.button("🚀 寫入雲端並重新計算"):
+    # 防呆：檢查期數是否已經存在
+    if new_issue in df['Issue'].astype(int).values:
+        st.sidebar.error(f"⚠️ 期數 {new_issue} 已經存在雲端資料庫中了，請勿重複新增！")
+    else:
+        sorted_nums = sorted([n1, n2, n3, n4, n5])
+        # 準備寫入 Google Sheets 的資料列
+        new_row = [new_date, new_issue, sorted_nums[0], sorted_nums[1], sorted_nums[2], sorted_nums[3], sorted_nums[4]]
+        
+        with st.spinner('正在寫入 Google 雲端資料庫...'):
+            sheet = get_google_sheet()
+            sheet.append_row(new_row) # 實際寫入雲端！
+            
+        st.sidebar.success(f"✅ 已成功將期數 {new_issue} 永久存入雲端！")
+        # 清除快取，強制系統重新從 Google Sheets 讀取最新資料
+        st.cache_data.clear()
+        st.rerun()
 
 # ==========================================
 # ⏳ 主畫面：時光機選擇器 (回放歷史)
 # ==========================================
 st.markdown("---")
-
-# 防呆 3：改用 DataFrame 的唯一索引 (Index) 當作時光機的鑰匙
 options = df.index.tolist()
 options.reverse()
 
@@ -66,12 +85,10 @@ def format_option(idx):
     return f"期數 {row['Issue']} ({row['Date']})"
     
 selected_idx = st.selectbox("⏳ **時光機：選擇你要分析的基準日 (預設為最新一期)**", options, format_func=format_option)
-
-# 擷取歷史資料 (改用 loc 絕對定位)
 historical_df = df.loc[:selected_idx]
 
 # ==========================================
-# 🧠 核心運算：以「選定日」為基準進行計算
+# 🧠 核心運算：歷史次數 + 空間型態
 # ==========================================
 nums_100 = historical_df.tail(100)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
 s_100 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_100).value_counts(), fill_value=0).astype(int)
@@ -82,7 +99,6 @@ s_200 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_200).value_count
 target_draw = historical_df.iloc[-1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
 target_date = historical_df.iloc[-1]['Date']
 
-# 💡 偷看「下一期」的真實答案
 if selected_idx + 1 < len(df):
     next_draw = df.loc[selected_idx + 1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
 else:
