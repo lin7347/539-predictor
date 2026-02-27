@@ -9,28 +9,62 @@ st.set_page_config(page_title="539 量化雷達 雲端資料庫版", layout="wid
 st.title("🎯 539 量化雷達 v8.0 (全端雲端資料庫版)")
 
 # ==========================================
-# 🔗 連接 Google Sheets 資料庫
+# 📖 新增：系統核心理論與策略解析 (白皮書)
+# ==========================================
+with st.expander("📖 點擊閱讀：本系統核心理論與策略解析 (Whitepaper)"):
+    st.markdown("""
+    這套分析方法是將**「股市的技術分析（Technical Analysis）」**與**「彩迷常見的行為心理學」**，完美移植到了彩券的數據模型中。它主要建構在以下兩大核心理論：
+
+    ### 🔵 200期（長線平衡派）：建構在「均值回歸」理論
+    長線派的腦袋，就像是股市裡的**「價值投資者」**與**「抄底大師」**。他們的分析基於以下三個假設：
+    * **大數法則與均值回歸 (Mean Reversion)：**
+      * **邏輯：** 長期來看，1 到 39 號每一顆球被抽出的機率應該是相等的。如果某個區間（例如連續 20 個號碼）長期沒開出，在統計學上就形成了「機率凹洞」。
+      * **行動：** 系統認定這個凹洞「遲早必須被填平」來回歸平均值。這就是為什麼長線派看到「史詩級大斷層」，會興奮地想要重押幾何中心點（填海造陸）。
+    * **圖形對稱性 (Symmetry & Patterns)：**
+      * **邏輯：** 數據分佈會傾向尋找平衡。當出現「05、07」卻獨缺「06」時，這在視覺與機率上形成了一個極度不穩定的「真空」。
+      * **行動：** 這就是我們常說的「完美黃金夾心」，長線派認為這種微小且對稱的破口，被系統強制修復的優先級最高。
+    * **同尾數的磁場共鳴：**
+      * **邏輯：** 這屬於彩迷長期的統計觀察，當特定的尾數（例如 9 尾的 09、39）在兩端強勢出現時，往往會帶動中間同家族的號碼（19、29）跟著開出。
+
+    ### 🔴 100期（短線動能派）：建構在「順勢動能」理論
+    短線派的腦袋，就像是股市裡的**「當沖客」**與**「動能交易員」**。他們完全不相信「填補凹洞」這套，他們的分析基於以下兩個假設：
+    * **熱度外溢與慣性 (Momentum & Trend Following)：**
+      * **邏輯：** 他們認為開獎號碼雖然隨機，但「資金與熱度」是有慣性的。昨天開出的號碼就像一顆投入水中的石頭，熱度會向左右兩邊擴散形成漣漪。
+      * **行動：** 這就是最強大且無腦的 「+1 / -1 順勢戰法」。06 開出，明天就買 07；避開冷門號碼，只跟著「剛開出的熱點」旁邊買，收割外溢的能量。
+    * **避開無量死水 (Avoid the Void)：**
+      * **邏輯：** 在股市中，「沒有成交量的地方不要去」。短線派認為，如果一個區間長期沒開出號碼，代表那個地方完全沒有動能。
+      * **行動：** 絕對不進去大斷層裡「接刀子」，寧願站在斷層邊緣（懸崖起步磚）防守。
+
+    ---
+    ### ⭐️ 為什麼要同時用這兩套互相矛盾的方法？
+    您會發現，這兩派的觀點經常是完全相反的（一派要跳進深海，一派叫你遠離深海）。
+    這套分析系統之所以強大，就在於它**「尋找雙方的交集（共識牌）」**。
+
+    當一個號碼（例如前面的 10 號或 32 號），既符合長線的「斷層邊緣防守」，又符合短線的「+1 動能推移」時，這個號碼就疊加了雙重的數學邏輯與策略意義。
+    在完全隨機的機率海中，選擇這種「邏輯支撐力最強」的共識號碼，是我們唯一能做到「在策略上優於盲目瞎猜」的方法。
+    """)
+    st.info("💡 **簡而言之，這是一套「結合統計學機率觀念與金融市場趨勢邏輯的娛樂策略」！**")
+
+# ==========================================
+# 🔗 連接 Google Sheets 資料庫 (以下維持不變)
 # ==========================================
 def get_google_sheet():
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
-    # 從 Streamlit 金庫讀取你的鑰匙
     creds_dict = json.loads(st.secrets["gcp_json"])
     creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     client = gspread.authorize(creds)
-    # 打開名叫 539 的試算表，並選擇第一個分頁
+    # ⚠️ 請確保這裡是你剛剛換上的專屬網址！
     sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1PrG36Oebngqhm7DrhEUNpfTtSk8k50jdAo2069aBJw8/edit?gid=978302798#gid=978302798").sheet1
     return sheet
 
-@st.cache_data(ttl=600) # 快取 10 分鐘，避免頻繁讀取雲端
+@st.cache_data(ttl=600)
 def load_data():
     sheet = get_google_sheet()
     data = sheet.get_all_records()
     df = pd.DataFrame(data)
-    
-    # 統一欄位名稱
     rename_dict = {
         'Date (開獎日期)': 'Date', 'Issue (期數)': 'Issue',
         'N1 (號碼1)': 'N1', 'N2 (號碼2)': 'N2', 'N3 (號碼3)': 'N3',
@@ -39,7 +73,6 @@ def load_data():
     df = df.rename(columns=rename_dict)
     return df
 
-# 直接從雲端抓取最新資料
 df = load_data()
 
 # ==========================================
@@ -56,20 +89,17 @@ n4 = st.sidebar.number_input("號碼 4", min_value=1, max_value=39, value=4)
 n5 = st.sidebar.number_input("號碼 5", min_value=1, max_value=39, value=5)
 
 if st.sidebar.button("🚀 寫入雲端並重新計算"):
-    # 防呆：檢查期數是否已經存在
     if new_issue in df['Issue'].astype(int).values:
         st.sidebar.error(f"⚠️ 期數 {new_issue} 已經存在雲端資料庫中了，請勿重複新增！")
     else:
         sorted_nums = sorted([n1, n2, n3, n4, n5])
-        # 準備寫入 Google Sheets 的資料列
         new_row = [new_date, new_issue, sorted_nums[0], sorted_nums[1], sorted_nums[2], sorted_nums[3], sorted_nums[4]]
         
         with st.spinner('正在寫入 Google 雲端資料庫...'):
             sheet = get_google_sheet()
-            sheet.append_row(new_row) # 實際寫入雲端！
+            sheet.append_row(new_row)
             
         st.sidebar.success(f"✅ 已成功將期數 {new_issue} 永久存入雲端！")
-        # 清除快取，強制系統重新從 Google Sheets 讀取最新資料
         st.cache_data.clear()
         st.rerun()
 
@@ -214,4 +244,3 @@ with col2:
     )
 
 st.markdown("*(本系統為量化數據教學使用，請理性參考)*")
-
