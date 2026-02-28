@@ -30,6 +30,12 @@ def load_data():
         'N4 (號碼4)': 'N4', 'N5 (號碼5)': 'N5'
     }
     df = df.rename(columns=rename_dict)
+    
+    # 🧹 新增過濾器：強制將「期數」轉為數字，並剔除掉空白行或無效的文字！
+    df['Issue'] = pd.to_numeric(df['Issue'], errors='coerce')
+    df = df.dropna(subset=['Issue']) # 刪除無效的資料行
+    df['Issue'] = df['Issue'].astype(int) # 轉為乾淨的整數
+    
     return df
 
 df = load_data()
@@ -61,7 +67,7 @@ with st.sidebar.expander("📝 輸入今日最新開獎號碼"):
     n5 = st.number_input("號碼 5", min_value=1, max_value=39, value=5)
 
     if st.button("🚀 寫入雲端並重新計算"):
-        if new_issue in df['Issue'].astype(int).values:
+        if new_issue in df['Issue'].values:
             st.error(f"⚠️ 期數 {new_issue} 已經存在雲端資料庫中了！")
         else:
             sorted_nums = sorted([n1, n2, n3, n4, n5])
@@ -267,3 +273,4 @@ elif page == "📖 核心理論白皮書":
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("*(本系統為量化數據教學使用，請理性參考)*")
+
