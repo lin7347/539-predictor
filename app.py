@@ -53,7 +53,7 @@ options.reverse()
 def format_option(idx):
     row = df.loc[idx]
     return f"期數 {row['Issue']} ({row['Date']})"
-selected_idx = st.sidebar.selectbox("選擇分析基準日：", options, format_func=format_option)
+selected_idx = st.sidebar.selectbox("選擇分析基準日：", options, format_func=format_option, key="time_machine")
 
 st.sidebar.markdown("---")
 with st.sidebar.expander("📝 輸入今日最新開獎號碼"):
@@ -77,8 +77,12 @@ with st.sidebar.expander("📝 輸入今日最新開獎號碼"):
                 sheet.append_row(new_row)
             st.success(f"✅ 成功寫入期數 {new_issue}！")
             st.cache_data.clear()
+            
+            # 🧹 拔掉時光機的記憶，強制它下一次載入時回到「最新一期」
+            if "time_machine" in st.session_state:
+                del st.session_state["time_machine"]
+                
             st.rerun()
-
 # ==========================================
 # 🧠 全域核心運算：歷史次數 + 空間型態 (時光機基準)
 # ==========================================
@@ -273,4 +277,5 @@ elif page == "📖 核心理論白皮書":
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("*(本系統為量化數據教學使用，請理性參考)*")
+
 
