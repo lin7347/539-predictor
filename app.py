@@ -52,19 +52,23 @@ def load_data(game_name):
     df['Issue'] = df['Issue'].astype(int)
     return df
 
-# 💡 關鍵：先把資料庫 (df) 抓下來，後面才能用！
 df = load_data(game_choice)
 
 # ==========================================
-# 🧠 空間演算法核心引擎
+# 🧠 空間演算法核心引擎 (✨ 完美升級版)
 # ==========================================
 def get_predictions(target_draw):
+    # 🚨 升級 1：強制排序，預防資料庫順序錯亂導致負數 Bug
+    target_draw = sorted(target_draw)
     extended_draw = [0] + target_draw + [40]
+    
+    # 1. 尋找死亡之海 (大於 5 碼的斷層)
     death_seas = []
     for i in range(len(extended_draw)-1):
         start, end = extended_draw[i], extended_draw[i+1]
         if end - start - 1 > 5: death_seas.append((start, end))
             
+    # 2. 短線順勢 (+1 / -1)
     short_picks = []
     for n in target_draw:
         for c in [n-1, n+1]:
@@ -72,8 +76,10 @@ def get_predictions(target_draw):
                 short_picks.append(int(c))
     short_picks = list(set(short_picks))
             
+    # 3. 尋找完美夾心缺口
     sandwiches = [int(target_draw[i]+1) for i in range(len(target_draw)-1) if target_draw[i+1]-target_draw[i]==2]
             
+    # 4. 尋找史詩斷層幾何中心
     max_gap = 0
     geometric_centers = []
     for i in range(len(extended_draw)-1):
@@ -86,11 +92,33 @@ def get_predictions(target_draw):
             center = (extended_draw[i+1] + extended_draw[i]) / 2
             geometric_centers.extend([int(np.floor(center)), int(np.ceil(center))] if center % 1 != 0 else [int(center)])
     geometric_centers = [int(c) for c in geometric_centers if 1 <= c <= 39]
+
+    # ==========================================
+    # 🌟 升級 2：新增同尾數共鳴演算法
+    # ==========================================
+    tails = [n % 10 for n in target_draw]
+    hot_tails = [t for t in set(tails) if tails.count(t) >= 2] # 找出出現 2 次以上的尾數
     
-    long_picks = list(set(geometric_centers + sandwiches))
+    tail_resonances = []
+    if hot_tails:
+        for t in hot_tails:
+            for n in range(1, 40):
+                if n % 10 == t:
+                    tail_resonances.append(n)
+
+    # ==========================================
+    # 🚨 升級 3：強制剔除「能量耗盡的原班人馬」
+    # ==========================================
+    short_picks = [p for p in short_picks if p not in target_draw]
+    sandwiches = [p for p in sandwiches if p not in target_draw]
+    geometric_centers = [p for p in geometric_centers if p not in target_draw]
+    tail_resonances = [p for p in tail_resonances if p not in target_draw]
+
+    # 彙整長線與共識牌
+    long_picks = list(set(geometric_centers + sandwiches + tail_resonances))
     consensus_picks = sorted(list(set(short_picks).intersection(set(long_picks))))
     
-    return short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, max_gap
+    return short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, tail_resonances, max_gap
 
 # ==========================================
 # 📝 側邊欄設定區 (導覽、時光機、新增數據)
@@ -146,17 +174,10 @@ with st.sidebar.expander(f"📝 輸入【{game_choice}】最新開獎號碼"):
             st.error(f"⚠️ 期數 {new_issue} 已經存在【{game_choice}】資料庫中了！")
         else:
             sorted_nums = sorted([n1, n2, n3, n4, n5])
-            
-            # 🚨 關鍵 1：確保排隊順序與 Google 試算表完全一致！
-            # (假設你的試算表 A 欄是「日期 Date」，B 欄是「期數 Issue」)
-            # 如果你的試算表 A 欄是期數，請把 new_date 跟 new_issue 對調過來！
             new_row = [new_date, new_issue, sorted_nums[0], sorted_nums[1], sorted_nums[2], sorted_nums[3], sorted_nums[4]]
             
             with st.spinner(f'正在寫入 {game_choice} Google 雲端資料庫...'):
                 sheet = get_google_sheet(game_choice)
-                
-                # 🪄 關鍵 2：加上 value_input_option="USER_ENTERED"
-                # 這會強迫 Google Sheets 把資料當作「真人手動敲鍵盤輸入」，絕對不會再出現格式錯亂！
                 sheet.append_row(new_row, value_input_option="USER_ENTERED")
             st.success(f"✅ 成功將期數 {new_issue} 寫入【{game_choice}】！")
             st.cache_data.clear()
@@ -183,7 +204,7 @@ if selected_idx + 1 < len(df):
 else:
     next_draw = []
 
-short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, max_gap = get_predictions(target_draw)
+short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, tail_resonances, max_gap = get_predictions(target_draw)
 
 # ==========================================
 # 🖥️ 頁面 1：🎯 39碼全解析雷達
@@ -200,10 +221,13 @@ if page == "🎯 39碼全解析雷達":
     
     full_39_data = []
     for n in range(1, 40):
-        if n in consensus_picks: status = "🌟 雙重共識 (強推主支)"
+        # 🚨 升級 4：加入能量耗盡與同尾數的狀態判斷
+        if n in target_draw: status = "🪫 能量耗盡 (原班人馬全殺)"
+        elif n in consensus_picks: status = "🌟 雙重共識 (強推主支)"
         elif any(sea_start < n < sea_end for sea_start, sea_end in death_seas): status = "💀 死亡深海 (強烈刪牌)"
         elif n in geometric_centers: status = "🎯 幾何中心 (長線引力)"
         elif n in sandwiches: status = "🥪 必補夾心 (型態缺口)"
+        elif n in tail_resonances: status = "🧲 同尾數共鳴 (家族召喚)"
         elif n in short_picks: status = "🔥 短線順勢 (+1/-1)"
         else: status = "⚖️ 中立觀望"
         
@@ -222,8 +246,11 @@ if page == "🎯 39碼全解析雷達":
         if isinstance(val, str):
             if '🌟' in val: return 'background-color: #d4edda; color: #155724; font-weight: bold'
             elif '💀' in val: return 'background-color: #f8d7da; color: #721c24'
+            elif '🪫' in val: return 'background-color: #e2e3e5; color: #6c757d; text-decoration: line-through'
+            elif '🧲' in val: return 'background-color: #e2d9f3; color: #4a148c; font-weight: bold'
             elif '🔥' in val or '🎯' in val or '🥪' in val: return 'background-color: #fff3cd; color: #856404'
         return ''
+        
     def color_base(val): return 'background-color: #cce5ff; color: #004085; font-weight: bold' if '🔵' in str(val) else ''
     def color_next(val): 
         if '✅' in str(val): return 'background-color: #28a745; color: white; font-weight: bold'
@@ -249,9 +276,9 @@ elif page == "⚔️ 雙引擎策略看板":
     
     col1, col2 = st.columns(2)
     with col1:
-        st.error("🔴 **100期 短線動能派**")
+        st.error("🔴 100期 短線動能派")
         st.markdown("#### 🔥 順勢動能 (+1 / -1)")
-        st.info(f"建議名單： **{short_picks}**" if short_picks else "*(今日無)*")
+        st.info(f"建議名單： {short_picks}" if short_picks else "*(今日無)*")
         st.markdown("#### 💀 避開死水 (死亡之海區間)")
         if death_seas:
             for sea in death_seas:
@@ -262,12 +289,14 @@ elif page == "⚔️ 雙引擎策略看板":
             st.success("今日無大型斷層區。")
 
     with col2:
-        st.info("🔵 **200期 長線平衡派**")
+        st.info("🔵 200期 長線平衡派")
         st.markdown("#### 🎯 史詩斷層 (幾何中心)")
-        st.markdown(f"*(當前最大斷層間距為: **{max_gap}**)*")
-        st.error(f"建議名單： **{geometric_centers}**" if geometric_centers else "*(無明顯斷層)*")
+        st.markdown(f"*(當前最大斷層間距為: {max_gap})*")
+        st.error(f"建議名單： {geometric_centers}" if geometric_centers else "*(無明顯斷層)*")
         st.markdown("#### 🥪 黃金對稱 (必補夾心)")
-        st.error(f"建議名單： **{sandwiches}**" if sandwiches else "*(今日未成形)*")
+        st.error(f"建議名單： {sandwiches}" if sandwiches else "*(今日未成形)*")
+        st.markdown("#### 🧲 同尾數共鳴 (家族召喚)")
+        st.error(f"建議名單： {tail_resonances}" if tail_resonances else "*(今日無同尾數)*")
 
     st.markdown("---")
     st.header("⭐️ 雙重共識牌 (疊加勝率)")
@@ -279,7 +308,7 @@ elif page == "⚔️ 雙引擎策略看板":
         st.header("🔮 實盤對答案 (下一期實際開出)")
         st.write(f"下一期號碼為：`{next_draw}`")
         hit_consensus = [n for n in consensus_picks if n in next_draw]
-        if hit_consensus: st.success(f"🎉 **神準命中！** 共識牌命中了： **{hit_consensus}**")
+        if hit_consensus: st.success(f"🎉 神準命中！ 共識牌命中了： {hit_consensus}")
 
 # ==========================================
 # 🖥️ 頁面 3：📈 回測與勝率追蹤
@@ -296,7 +325,8 @@ elif page == "📈 回測與勝率追蹤":
             actual_next_draw = [int(x) for x in df.iloc[i+1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()]
             draw_date = df.iloc[i+1]['Date']
             
-            sp, lp, cp, _, _, _, _ = get_predictions(past_draw)
+            # 注意這裡多了一個 _ 來承接 tail_resonances
+            sp, lp, cp, _, _, _, _, _ = get_predictions(past_draw)
             
             short_hits = len(set(sp).intersection(set(actual_next_draw)))
             long_hits = len(set(lp).intersection(set(actual_next_draw)))
@@ -340,25 +370,25 @@ elif page == "📖 核心理論白皮書":
     st.image("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1200&auto=format&fit=crop", caption="結合統計學機率觀念與金融市場趨勢邏輯")
     
     st.markdown("""
-    這套分析方法是將**「股市的技術分析（Technical Analysis）」**與**「彩迷常見的行為心理學」**，完美移植到了彩券的數據模型中。它主要建構在以下兩大核心理論：
+    這套分析方法是將「股市的技術分析（Technical Analysis）」與「彩迷常見的行為心理學」，完美移植到了彩券的數據模型中。它主要建構在以下兩大核心理論：
 
     ### 🔵 200期（長線平衡派）：建構在「均值回歸」理論
-    長線派的腦袋，就像是股市裡的**「價值投資者」**與**「抄底大師」**。他們的分析基於以下三個假設：
-    * **大數法則與均值回歸 (Mean Reversion)：**
-      * **邏輯：** 長期來看，1 到 39 號每一顆球被抽出的機率應該是相等的。如果某個區間（例如連續 20 個號碼）長期沒開出，在統計學上就形成了「機率凹洞」。
-      * **行動：** 系統認定這個凹洞「遲早必須被填平」來回歸平均值。這就是為什麼長線派看到「史詩級大斷層」，會興奮地想要重押幾何中心點（填海造陸）。
-    * **圖形對稱性 (Symmetry & Patterns)：**
-      * **邏輯：** 數據分佈會傾向尋找平衡。當出現「05、07」卻獨缺「06」時，這在視覺與機率上形成了一個極度不穩定的「真空」。
-      * **行動：** 這就是我們常說的「完美黃金夾心」，長線派認為這種微小且對稱的破口，被系統強制修復的優先級最高。
+    長線派的腦袋，就像是股市裡的「價值投資者」與「抄底大師」。他們的分析基於以下三個假設：
+    * 大數法則與均值回歸 (Mean Reversion)：
+      * 邏輯： 長期來看，1 到 39 號每一顆球被抽出的機率應該是相等的。如果某個區間（例如連續 20 個號碼）長期沒開出，在統計學上就形成了「機率凹洞」。
+      * 行動： 系統認定這個凹洞「遲早必須被填平」來回歸平均值。這就是為什麼長線派看到「史詩級大斷層」，會興奮地想要重押幾何中心點（填海造陸）。
+    * 圖形對稱性 (Symmetry & Patterns)：
+      * 邏輯： 數據分佈會傾向尋找平衡。當出現「05、07」卻獨缺「06」時，這在視覺與機率上形成了一個極度不穩定的「真空」。
+      * 行動： 這就是我們常說的「完美黃金夾心」，長線派認為這種微小且對稱的破口，被系統強制修復的優先級最高。
+    * 同尾數的磁場共鳴：
+      * 邏輯： 當特定的尾數（例如 9 尾的 09、39）在同一期強勢出現兩顆以上時，往往會帶動中間同家族的號碼（19、29）在下一期跟著開出。
 
     ### 🔴 100期（短線動能派）：建構在「順勢動能」理論
-    短線派的腦袋，就像是股市裡的**「當沖客」**與**「動能交易員」**。他們完全不相信「填補凹洞」這套，他們的分析基於以下兩個假設：
-    * **熱度外溢與慣性 (Momentum & Trend Following)：**
-      * **邏輯：** 他們認為開獎號碼雖然隨機，但「資金與熱度」是有慣性的。昨天開出的號碼就像一顆投入水中的石頭，熱度會向左右兩邊擴散形成漣漪。
-      * **行動：** 這就是最強大且無腦的 「+1 / -1 順勢戰法」。06 開出，明天就買 07；避開冷門號碼，只跟著「剛開出的熱點」旁邊買，收割外溢的能量。
-    * **避開無量死水 (Avoid the Void)：**
-      * **邏輯：** 在股市中，「沒有成交量的地方不要去」。短線派認為，如果一個區間長期沒開出號碼，代表那個地方完全沒有動能。
-      * **行動：** 絕對不進去大斷層裡「接刀子」，寧願站在斷層邊緣（懸崖起步磚）防守。
+    短線派的腦袋，就像是股市裡的「當沖客」與「動能交易員」。他們完全不相信「填補凹洞」這套，他們的分析基於以下兩個假設：
+    * 熱度外溢與慣性 (Momentum & Trend Following)：
+      * 邏輯： 他們認為開獎號碼雖然隨機，但「資金與熱度」是有慣性的。昨天開出的號碼就像一顆投入水中的石頭，熱度會向左右兩邊擴散形成漣漪。
+      * 行動： 這就是最強大且無腦的 「+1 / -1 順勢戰法」。06 開出，明天就買 07；避開冷門號碼，只跟著「剛開出的熱點」旁邊買，收割外溢的能量。
+    * 避開無量死水 (Avoid the Void)：
+      * 邏輯： 在股市中，「沒有成交量的地方不要去」。短線派認為，如果一個區間長期沒開出號碼，代表那個地方完全沒有動能。
+      * 行動： 絕對不進去大斷層裡「接刀子」，寧願站在斷層邊緣（懸崖起步磚）防守。
     """)
-
-
