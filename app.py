@@ -5,7 +5,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 
-st.set_page_config(page_title="539 量化雷達 雙引擎策略版", layout="wide")
+st.set_page_config(page_title="539 量化雷達 終極完整版", layout="wide")
 
 # ==========================================
 # 🔗 連接 Google Sheets 資料庫
@@ -30,21 +30,61 @@ def load_data():
         'N4 (號碼4)': 'N4', 'N5 (號碼5)': 'N5'
     }
     df = df.rename(columns=rename_dict)
-    
-    # 🧹 新增過濾器：強制將「期數」轉為數字，並剔除掉空白行或無效的文字！
     df['Issue'] = pd.to_numeric(df['Issue'], errors='coerce')
-    df = df.dropna(subset=['Issue']) # 刪除無效的資料行
-    df['Issue'] = df['Issue'].astype(int) # 轉為乾淨的整數
-    
+    df = df.dropna(subset=['Issue'])
+    df['Issue'] = df['Issue'].astype(int)
     return df
 
 df = load_data()
 
 # ==========================================
+# 🧠 空間演算法核心引擎 (打包成函式供回測使用)
+# ==========================================
+def get_predictions(target_draw):
+    extended_draw = [0] + target_draw + [40]
+    
+    death_seas = []
+    for i in range(len(extended_draw)-1):
+        start, end = extended_draw[i], extended_draw[i+1]
+        if end - start - 1 > 5: death_seas.append((start, end))
+            
+    short_picks = []
+    for n in target_draw:
+        for c in [n-1, n+1]:
+            if 1 <= c <= 39 and not any(sea_start < c < sea_end for sea_start, sea_end in death_seas):
+                short_picks.append(int(c))
+    short_picks = list(set(short_picks))
+            
+    sandwiches = [int(target_draw[i]+1) for i in range(len(target_draw)-1) if target_draw[i+1]-target_draw[i]==2]
+            
+    max_gap = 0
+    geometric_centers = []
+    for i in range(len(extended_draw)-1):
+        gap = extended_draw[i+1] - extended_draw[i] - 1
+        if gap > max_gap:
+            max_gap = gap
+            center = (extended_draw[i+1] + extended_draw[i]) / 2
+            geometric_centers = [int(np.floor(center)), int(np.ceil(center))] if center % 1 != 0 else [int(center)]
+        elif gap == max_gap and gap > 0:
+            center = (extended_draw[i+1] + extended_draw[i]) / 2
+            geometric_centers.extend([int(np.floor(center)), int(np.ceil(center))] if center % 1 != 0 else [int(center)])
+    geometric_centers = [int(c) for c in geometric_centers if 1 <= c <= 39]
+    
+    long_picks = list(set(geometric_centers + sandwiches))
+    consensus_picks = sorted(list(set(short_picks).intersection(set(long_picks))))
+    
+    return short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, max_gap
+
+# ==========================================
 # 📝 側邊欄設定區 (導覽、時光機、新增數據)
 # ==========================================
 st.sidebar.title("🧭 系統導覽")
-page = st.sidebar.radio("選擇你想查看的頁面：", ["🎯 39碼全解析雷達", "⚔️ 雙引擎策略看板", "📖 核心理論白皮書"])
+page = st.sidebar.radio("選擇分析面板：", [
+    "🎯 39碼全解析雷達", 
+    "⚔️ 雙引擎策略看板", 
+    "📈 回測與勝率追蹤", 
+    "📖 核心理論白皮書"
+])
 
 st.sidebar.markdown("---")
 st.sidebar.header("⏳ 時光機設定")
@@ -71,28 +111,20 @@ with st.sidebar.expander("📝 輸入今日最新開獎號碼"):
             st.error(f"⚠️ 期數 {new_issue} 已經存在雲端資料庫中了！")
         else:
             sorted_nums = sorted([n1, n2, n3, n4, n5])
-            new_row = [new_date, new_issue, sorted_nums[0], sorted_nums[1], sorted_nums[2], sorted_nums[3], sorted_nums[4]]
+            new_row = [new_issue, new_date, sorted_nums[0], sorted_nums[1], sorted_nums[2], sorted_nums[3], sorted_nums[4]]
             with st.spinner('正在寫入 Google 雲端資料庫...'):
                 sheet = get_google_sheet()
                 sheet.append_row(new_row)
             st.success(f"✅ 成功寫入期數 {new_issue}！")
             st.cache_data.clear()
-            
-            # 🧹 拔掉時光機的記憶，強制它下一次載入時回到「最新一期」
             if "time_machine" in st.session_state:
                 del st.session_state["time_machine"]
-                
             st.rerun()
+
 # ==========================================
-# 🧠 全域核心運算：歷史次數 + 空間型態 (時光機基準)
+# 🧠 當前選定日的狀態計算 (用於前兩個頁面)
 # ==========================================
 historical_df = df.loc[:selected_idx]
-
-nums_100 = historical_df.tail(100)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
-s_100 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_100).value_counts(), fill_value=0).astype(int)
-
-nums_200 = historical_df.tail(200)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
-s_200 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_200).value_counts(), fill_value=0).astype(int)
 
 target_draw = historical_df.iloc[-1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
 target_date = historical_df.iloc[-1]['Date']
@@ -103,37 +135,7 @@ if selected_idx + 1 < len(df):
 else:
     next_draw = []
 
-extended_draw = [0] + target_draw + [40]
-
-death_seas = []
-for i in range(len(extended_draw)-1):
-    start, end = extended_draw[i], extended_draw[i+1]
-    if end - start - 1 > 5: death_seas.append((start, end))
-        
-short_picks = []
-for n in target_draw:
-    for c in [n-1, n+1]:
-        if 1 <= c <= 39 and not any(sea_start < c < sea_end for sea_start, sea_end in death_seas):
-            short_picks.append(int(c))
-short_picks = list(set(short_picks))
-        
-sandwiches = [int(target_draw[i]+1) for i in range(len(target_draw)-1) if target_draw[i+1]-target_draw[i]==2]
-        
-max_gap = 0
-geometric_centers = []
-for i in range(len(extended_draw)-1):
-    gap = extended_draw[i+1] - extended_draw[i] - 1
-    if gap > max_gap:
-        max_gap = gap
-        center = (extended_draw[i+1] + extended_draw[i]) / 2
-        geometric_centers = [int(np.floor(center)), int(np.ceil(center))] if center % 1 != 0 else [int(center)]
-    elif gap == max_gap and gap > 0:
-        center = (extended_draw[i+1] + extended_draw[i]) / 2
-        geometric_centers.extend([int(np.floor(center)), int(np.ceil(center))] if center % 1 != 0 else [int(center)])
-geometric_centers = [int(c) for c in geometric_centers if 1 <= c <= 39]
-
-long_picks = list(set(geometric_centers + sandwiches))
-consensus_picks = sorted(list(set(short_picks).intersection(set(long_picks))))
+short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, max_gap = get_predictions(target_draw)
 
 # ==========================================
 # 🖥️ 頁面 1：🎯 39碼全解析雷達
@@ -141,6 +143,12 @@ consensus_picks = sorted(list(set(short_picks).intersection(set(long_picks))))
 if page == "🎯 39碼全解析雷達":
     st.title("🎯 39碼全解析雷達 (歷史次數與空間驗證)")
     st.markdown(f"### 基準日：{target_date} (期數 {target_issue}) | 開出號碼： `{target_draw}`")
+    
+    nums_100 = historical_df.tail(100)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
+    s_100 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_100).value_counts(), fill_value=0).astype(int)
+
+    nums_200 = historical_df.tail(200)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
+    s_200 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_200).value_counts(), fill_value=0).astype(int)
     
     full_39_data = []
     for n in range(1, 40):
@@ -194,11 +202,11 @@ elif page == "⚔️ 雙引擎策略看板":
     col1, col2 = st.columns(2)
     
     with col1:
-        st.error("🔴 **短線動能派 (100期順勢)**")
+        st.error("🔴 **100期 短線動能派**")
         st.markdown("**核心思維：** 熱度外溢與慣性，避開無量死水。")
         st.markdown("---")
         st.markdown("#### 🔥 順勢動能 (+1 / -1)")
-        st.info(f"建議名單： **{short_picks}**" if short_picks else "*(今日無號碼存活)*")
+        st.info(f"建議名單： **{short_picks}**" if short_picks else "*(今日無)*")
         
         st.markdown("#### 💀 避開死水 (死亡之海區間)")
         if death_seas:
@@ -210,7 +218,7 @@ elif page == "⚔️ 雙引擎策略看板":
             st.success("今日無大型斷層區。")
 
     with col2:
-        st.info("🔵 **長線平衡派 (200期均值)**")
+        st.info("🔵 **200期 長線平衡派**")
         st.markdown("**核心思維：** 大數法則與均值回歸，填平機率凹洞。")
         st.markdown("---")
         st.markdown("#### 🎯 史詩斷層 (幾何中心)")
@@ -222,11 +230,10 @@ elif page == "⚔️ 雙引擎策略看板":
 
     st.markdown("---")
     st.header("⭐️ 雙重共識牌 (疊加勝率)")
-    st.markdown("當號碼同時符合「短線邊緣防守」與「長線引力中心」時，為邏輯支撐力最強之主支。")
     if consensus_picks:
         st.success(f"### 🎯 極高勝率主支： {consensus_picks}")
     else:
-        st.warning("今日兩派未達成共識，建議分開參考上方指標，或保持觀望。")
+        st.warning("今日兩派未達成共識，建議分開參考上方指標。")
         
     if next_draw:
         st.markdown("---")
@@ -237,7 +244,62 @@ elif page == "⚔️ 雙引擎策略看板":
             st.success(f"🎉 **神準命中！** 共識牌命中了： **{hit_consensus}**")
 
 # ==========================================
-# 🖥️ 頁面 3：📖 核心理論白皮書
+# 🖥️ 頁面 3：📈 回測與勝率追蹤 (全新頁面)
+# ==========================================
+elif page == "📈 回測與勝率追蹤":
+    st.title("📈 策略勝率與回測追蹤 (近 100 期)")
+    st.markdown("這就像是股市程式交易的「對帳單」。系統自動以過去 100 期的歷史資料進行「蒙眼盲測」，計算出短線與長線演算法的**真實命中次數**。")
+    
+    test_periods = 100
+    if len(df) > test_periods:
+        results = []
+        # 從過去 100 期開始，一路回測到最新的一期
+        start_idx = len(df) - test_periods - 1
+        for i in range(start_idx, len(df) - 1):
+            past_draw = df.iloc[i][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
+            actual_next_draw = df.iloc[i+1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
+            draw_date = df.iloc[i+1]['Date']
+            
+            # 讓系統用那一天的號碼去預測
+            sp, lp, cp, _, _, _, _ = get_predictions(past_draw)
+            
+            # 跟隔天的真實開獎對答案
+            short_hits = len(set(sp).intersection(set(actual_next_draw)))
+            long_hits = len(set(lp).intersection(set(actual_next_draw)))
+            consensus_hits = len(set(cp).intersection(set(actual_next_draw)))
+            
+            results.append({
+                "Date": draw_date,
+                "🔴 100期短線派 命中數": short_hits,
+                "🔵 200期長線派 命中數": long_hits,
+                "⭐️ 雙重共識牌 命中數": consensus_hits
+            })
+        
+        res_df = pd.DataFrame(results).set_index("Date")
+        
+        # 計算累積命中次數 (畫折線圖用)
+        res_df["🔴 短線累積命中"] = res_df["🔴 100期短線派 命中數"].cumsum()
+        res_df["🔵 長線累積命中"] = res_df["🔵 200期長線派 命中數"].cumsum()
+        res_df["⭐️ 共識累積命中"] = res_df["⭐️ 雙重共識牌 命中數"].cumsum()
+        
+        st.markdown("---")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("🔴 100期短線派 (近百期總命中)", f"{res_df['🔴 短線累積命中'].iloc[-1]} 顆")
+        col2.metric("🔵 200期長線派 (近百期總命中)", f"{res_df['🔵 長線累積命中'].iloc[-1]} 顆")
+        col3.metric("⭐️ 雙重共識牌 (近百期總命中)", f"{res_df['⭐️ 共識累積命中'].iloc[-1]} 顆")
+        
+        st.markdown("### 📊 雙引擎命中趨勢圖")
+        st.markdown("觀察哪一條線爬升得比較快，代表近期的盤勢比較偏向該派別的邏輯。")
+        st.line_chart(res_df[["🔴 短線累積命中", "🔵 長線累積命中", "⭐️ 共識累積命中"]])
+        
+        with st.expander("📝 展開查看：每日命中明細對帳單"):
+            st.dataframe(res_df[["🔴 100期短線派 命中數", "🔵 200期長線派 命中數", "⭐️ 雙重共識牌 命中數"]], use_container_width=True)
+            
+    else:
+        st.warning("⚠️ 資料庫期數不足 100 期，無法進行完整回測。")
+
+# ==========================================
+# 🖥️ 頁面 4：📖 核心理論白皮書
 # ==========================================
 elif page == "📖 核心理論白皮書":
     st.title("📖 核心理論與策略解析 (Whitepaper)")
@@ -277,5 +339,3 @@ elif page == "📖 核心理論白皮書":
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("*(本系統為量化數據教學使用，請理性參考)*")
-
-
