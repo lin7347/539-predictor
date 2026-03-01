@@ -8,76 +8,14 @@ import json
 st.set_page_config(page_title="量化雷達 雙彩種切換版", layout="wide")
 
 # ==========================================
-# 📝 側邊欄設定區 (導覽、時光機、新增數據)
+# 📝 側邊欄：彩種切換開關 (必須在最上面先選)
 # ==========================================
-st.sidebar.title("🧭 系統導覽")
-page = st.sidebar.radio("選擇分析面板：", [
-    "🎯 39碼全解析雷達", 
-    "⚔️ 雙引擎策略看板", 
-    "📈 回測與勝率追蹤", 
-    "📖 核心理論白皮書"
-])
-
-st.sidebar.markdown("---")
-st.sidebar.header("⏳ 時光機設定")
-
-# 檢查資料庫是否有資料，避免天天樂剛建好時報錯
-if not df.empty:
-    options = df.index.tolist()
-    options.reverse()
-    def format_option(idx):
-        row = df.loc[idx]
-        return f"期數 {row['Issue']} ({row['Date']})"
-    selected_idx = st.sidebar.selectbox("選擇分析基準日：", options, format_func=format_option, key=f"time_machine_{game_choice}")
-else:
-    st.sidebar.warning(f"⚠️ 你的【{game_choice}】資料庫目前是空的！請先新增開獎數據。")
-    selected_idx = None
-
+st.sidebar.title("🎲 選擇分析彩種")
+game_choice = st.sidebar.radio("目前分析目標：", ["539", "天天樂"])
 st.sidebar.markdown("---")
 
-# 🤖 智慧自動遞增邏輯：讀取最後一筆資料來決定預設值
-if not df.empty:
-    # 抓取最後一筆期數，自動 +1
-    auto_next_issue = int(df.iloc[-1]['Issue']) + 1
-    # 抓取最後一筆日期，自動加一天
-    try:
-        last_date = pd.to_datetime(df.iloc[-1]['Date'])
-        auto_next_date = (last_date + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
-    except:
-        # 如果日期格式有誤讀不出來，給一個備用預設值
-        auto_next_date = "2026-03-01"
-else:
-    auto_next_issue = 1
-    auto_next_date = "2026-03-01"
-
-with st.sidebar.expander(f"📝 輸入【{game_choice}】最新開獎號碼"):
-    # 這裡的 value 已經換成了剛剛算出來的最新推測值！
-    new_date = st.text_input("開獎日期 (YYYY-MM-DD)", value=auto_next_date)
-    new_issue = st.number_input("期數", min_value=1, value=auto_next_issue, step=1)
-    st.markdown("*(輸入順序不拘，系統會自動排序)*")
-    n1 = st.number_input("號碼 1", min_value=1, max_value=39, value=1)
-    n2 = st.number_input("號碼 2", min_value=1, max_value=39, value=2)
-    n3 = st.number_input("號碼 3", min_value=1, max_value=39, value=3)
-    n4 = st.number_input("號碼 4", min_value=1, max_value=39, value=4)
-    n5 = st.number_input("號碼 5", min_value=1, max_value=39, value=5)
-
-    if st.button("🚀 寫入雲端並重新計算"):
-        if not df.empty and new_issue in df['Issue'].values:
-            st.error(f"⚠️ 期數 {new_issue} 已經存在【{game_choice}】資料庫中了！")
-        else:
-            sorted_nums = sorted([n1, n2, n3, n4, n5])
-            new_row = [new_issue, new_date, sorted_nums[0], sorted_nums[1], sorted_nums[2], sorted_nums[3], sorted_nums[4]]
-            with st.spinner(f'正在寫入 {game_choice} Google 雲端資料庫...'):
-                sheet = get_google_sheet(game_choice)
-                sheet.append_row(new_row)
-            st.success(f"✅ 成功將期數 {new_issue} 寫入【{game_choice}】！")
-            st.cache_data.clear()
-            if f"time_machine_{game_choice}" in st.session_state:
-                del st.session_state[f"time_machine_{game_choice}"]
-            st.rerun()
-
 # ==========================================
-# 🔗 連接 Google Sheets 資料庫 (加入分頁動態切換)
+# 🔗 連接 Google Sheets 資料庫
 # ==========================================
 def get_google_sheet(sheet_name):
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -86,7 +24,6 @@ def get_google_sheet(sheet_name):
     client = gspread.authorize(creds)
     # ⚠️ 請把下面這行換成你自己的專屬網址！
     doc = client.open_by_url("https://docs.google.com/spreadsheets/d/1PrG36Oebngqhm7DrhEUNpfTtSk8k50jdAo2069aBJw8/edit?gid=978302798#gid=978302798")
-    # 根據左邊選的彩種，打開對應的分頁
     return doc.worksheet(sheet_name)
 
 @st.cache_data(ttl=600)
@@ -95,7 +32,6 @@ def load_data(game_name):
     data = sheet.get_all_records()
     df = pd.DataFrame(data)
     
-    # 防呆：如果該分頁目前沒資料，給一個空的 DataFrame
     if df.empty:
         return pd.DataFrame(columns=['Date', 'Issue', 'N1', 'N2', 'N3', 'N4', 'N5'])
         
@@ -110,11 +46,11 @@ def load_data(game_name):
     df['Issue'] = df['Issue'].astype(int)
     return df
 
-# 動態載入使用者選擇的彩種資料庫
+# 💡 關鍵：先把資料庫 (df) 抓下來，後面才能用！
 df = load_data(game_choice)
 
 # ==========================================
-# 🧠 空間演算法核心引擎 (維持不變)
+# 🧠 空間演算法核心引擎
 # ==========================================
 def get_predictions(target_draw):
     extended_draw = [0] + target_draw + [40]
@@ -164,7 +100,6 @@ page = st.sidebar.radio("選擇分析面板：", [
 st.sidebar.markdown("---")
 st.sidebar.header("⏳ 時光機設定")
 
-# 檢查資料庫是否有資料，避免天天樂剛建好時報錯
 if not df.empty:
     options = df.index.tolist()
     options.reverse()
@@ -177,9 +112,22 @@ else:
     selected_idx = None
 
 st.sidebar.markdown("---")
+
+# 🤖 智慧自動遞增邏輯
+if not df.empty:
+    auto_next_issue = int(df.iloc[-1]['Issue']) + 1
+    try:
+        last_date = pd.to_datetime(df.iloc[-1]['Date'])
+        auto_next_date = (last_date + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
+    except:
+        auto_next_date = "2026-03-01"
+else:
+    auto_next_issue = 1
+    auto_next_date = "2026-03-01"
+
 with st.sidebar.expander(f"📝 輸入【{game_choice}】最新開獎號碼"):
-    new_date = st.text_input("開獎日期 (YYYY-MM-DD)", "2026-02-25")
-    new_issue = st.number_input("期數", min_value=1, value=115048, step=1)
+    new_date = st.text_input("開獎日期 (YYYY-MM-DD)", value=auto_next_date)
+    new_issue = st.number_input("期數", min_value=1, value=auto_next_issue, step=1)
     st.markdown("*(輸入順序不拘，系統會自動排序)*")
     n1 = st.number_input("號碼 1", min_value=1, max_value=39, value=1)
     n2 = st.number_input("號碼 2", min_value=1, max_value=39, value=2)
@@ -202,7 +150,6 @@ with st.sidebar.expander(f"📝 輸入【{game_choice}】最新開獎號碼"):
                 del st.session_state[f"time_machine_{game_choice}"]
             st.rerun()
 
-# 如果資料庫是空的，就不往下執行分析畫面，直接提示使用者新增資料
 if df.empty:
     st.title(f"🎯 歡迎啟用【{game_choice}】分析雷達")
     st.info("👈 請先從左側邊欄輸入第一筆歷史開獎紀錄，系統才能開始運作喔！")
@@ -377,6 +324,25 @@ elif page == "📈 回測與勝率追蹤":
 elif page == "📖 核心理論白皮書":
     st.title("📖 核心理論與策略解析 (Whitepaper)")
     st.image("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1200&auto=format&fit=crop", caption="結合統計學機率觀念與金融市場趨勢邏輯")
-    # (白皮書內文維持不變，省略避免佔用篇幅)
-    st.markdown("這套分析方法是將**「股市的技術分析」**與**「彩迷常見的行為心理學」**，完美移植到了彩券的數據模型中...")
+    
+    st.markdown("""
+    這套分析方法是將**「股市的技術分析（Technical Analysis）」**與**「彩迷常見的行為心理學」**，完美移植到了彩券的數據模型中。它主要建構在以下兩大核心理論：
 
+    ### 🔵 200期（長線平衡派）：建構在「均值回歸」理論
+    長線派的腦袋，就像是股市裡的**「價值投資者」**與**「抄底大師」**。他們的分析基於以下三個假設：
+    * **大數法則與均值回歸 (Mean Reversion)：**
+      * **邏輯：** 長期來看，1 到 39 號每一顆球被抽出的機率應該是相等的。如果某個區間（例如連續 20 個號碼）長期沒開出，在統計學上就形成了「機率凹洞」。
+      * **行動：** 系統認定這個凹洞「遲早必須被填平」來回歸平均值。這就是為什麼長線派看到「史詩級大斷層」，會興奮地想要重押幾何中心點（填海造陸）。
+    * **圖形對稱性 (Symmetry & Patterns)：**
+      * **邏輯：** 數據分佈會傾向尋找平衡。當出現「05、07」卻獨缺「06」時，這在視覺與機率上形成了一個極度不穩定的「真空」。
+      * **行動：** 這就是我們常說的「完美黃金夾心」，長線派認為這種微小且對稱的破口，被系統強制修復的優先級最高。
+
+    ### 🔴 100期（短線動能派）：建構在「順勢動能」理論
+    短線派的腦袋，就像是股市裡的**「當沖客」**與**「動能交易員」**。他們完全不相信「填補凹洞」這套，他們的分析基於以下兩個假設：
+    * **熱度外溢與慣性 (Momentum & Trend Following)：**
+      * **邏輯：** 他們認為開獎號碼雖然隨機，但「資金與熱度」是有慣性的。昨天開出的號碼就像一顆投入水中的石頭，熱度會向左右兩邊擴散形成漣漪。
+      * **行動：** 這就是最強大且無腦的 「+1 / -1 順勢戰法」。06 開出，明天就買 07；避開冷門號碼，只跟著「剛開出的熱點」旁邊買，收割外溢的能量。
+    * **避開無量死水 (Avoid the Void)：**
+      * **邏輯：** 在股市中，「沒有成交量的地方不要去」。短線派認為，如果一個區間長期沒開出號碼，代表那個地方完全沒有動能。
+      * **行動：** 絕對不進去大斷層裡「接刀子」，寧願站在斷層邊緣（懸崖起步磚）防守。
+    """)
