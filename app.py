@@ -146,10 +146,18 @@ with st.sidebar.expander(f"📝 輸入【{game_choice}】最新開獎號碼"):
             st.error(f"⚠️ 期數 {new_issue} 已經存在【{game_choice}】資料庫中了！")
         else:
             sorted_nums = sorted([n1, n2, n3, n4, n5])
-            new_row = [new_issue, new_date, sorted_nums[0], sorted_nums[1], sorted_nums[2], sorted_nums[3], sorted_nums[4]]
+            
+            # 🚨 關鍵 1：確保排隊順序與 Google 試算表完全一致！
+            # (假設你的試算表 A 欄是「日期 Date」，B 欄是「期數 Issue」)
+            # 如果你的試算表 A 欄是期數，請把 new_date 跟 new_issue 對調過來！
+            new_row = [new_date, new_issue, sorted_nums[0], sorted_nums[1], sorted_nums[2], sorted_nums[3], sorted_nums[4]]
+            
             with st.spinner(f'正在寫入 {game_choice} Google 雲端資料庫...'):
                 sheet = get_google_sheet(game_choice)
-                sheet.append_row(new_row)
+                
+                # 🪄 關鍵 2：加上 value_input_option="USER_ENTERED"
+                # 這會強迫 Google Sheets 把資料當作「真人手動敲鍵盤輸入」，絕對不會再出現格式錯亂！
+                sheet.append_row(new_row, value_input_option="USER_ENTERED")
             st.success(f"✅ 成功將期數 {new_issue} 寫入【{game_choice}】！")
             st.cache_data.clear()
             if f"time_machine_{game_choice}" in st.session_state:
@@ -352,4 +360,5 @@ elif page == "📖 核心理論白皮書":
       * **邏輯：** 在股市中，「沒有成交量的地方不要去」。短線派認為，如果一個區間長期沒開出號碼，代表那個地方完全沒有動能。
       * **行動：** 絕對不進去大斷層裡「接刀子」，寧願站在斷層邊緣（懸崖起步磚）防守。
     """)
+
 
