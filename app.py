@@ -255,8 +255,9 @@ elif page == "📈 回測與勝率追蹤":
         results = []
         start_idx = len(df) - test_periods - 1
         for i in range(start_idx, len(df) - 1):
-            past_draw = df.iloc[i][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
-            actual_next_draw = df.iloc[i+1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
+            # 🧹 脫掉 np.int64 裝甲，強制轉為乾淨的普通數字
+            past_draw = [int(x) for x in df.iloc[i][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()]
+            actual_next_draw = [int(x) for x in df.iloc[i+1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()]
             draw_date = df.iloc[i+1]['Date']
             
             sp, lp, cp, _, _, _, _ = get_predictions(past_draw)
@@ -349,3 +350,4 @@ elif page == "📖 核心理論白皮書":
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("*(本系統為量化數據教學使用，請理性參考)*")
+
