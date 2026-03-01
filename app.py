@@ -8,12 +8,73 @@ import json
 st.set_page_config(page_title="量化雷達 雙彩種切換版", layout="wide")
 
 # ==========================================
-# 📝 側邊欄：彩種切換開關 (最重要的新增！)
+# 📝 側邊欄設定區 (導覽、時光機、新增數據)
 # ==========================================
-st.sidebar.title("🎲 選擇分析彩種")
-# 讓使用者選擇要看哪一個彩券，這個變數會決定去抓哪一個資料庫分頁
-game_choice = st.sidebar.radio("目前分析目標：", ["539", "天天樂"])
+st.sidebar.title("🧭 系統導覽")
+page = st.sidebar.radio("選擇分析面板：", [
+    "🎯 39碼全解析雷達", 
+    "⚔️ 雙引擎策略看板", 
+    "📈 回測與勝率追蹤", 
+    "📖 核心理論白皮書"
+])
+
 st.sidebar.markdown("---")
+st.sidebar.header("⏳ 時光機設定")
+
+# 檢查資料庫是否有資料，避免天天樂剛建好時報錯
+if not df.empty:
+    options = df.index.tolist()
+    options.reverse()
+    def format_option(idx):
+        row = df.loc[idx]
+        return f"期數 {row['Issue']} ({row['Date']})"
+    selected_idx = st.sidebar.selectbox("選擇分析基準日：", options, format_func=format_option, key=f"time_machine_{game_choice}")
+else:
+    st.sidebar.warning(f"⚠️ 你的【{game_choice}】資料庫目前是空的！請先新增開獎數據。")
+    selected_idx = None
+
+st.sidebar.markdown("---")
+
+# 🤖 智慧自動遞增邏輯：讀取最後一筆資料來決定預設值
+if not df.empty:
+    # 抓取最後一筆期數，自動 +1
+    auto_next_issue = int(df.iloc[-1]['Issue']) + 1
+    # 抓取最後一筆日期，自動加一天
+    try:
+        last_date = pd.to_datetime(df.iloc[-1]['Date'])
+        auto_next_date = (last_date + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
+    except:
+        # 如果日期格式有誤讀不出來，給一個備用預設值
+        auto_next_date = "2026-03-01"
+else:
+    auto_next_issue = 1
+    auto_next_date = "2026-03-01"
+
+with st.sidebar.expander(f"📝 輸入【{game_choice}】最新開獎號碼"):
+    # 這裡的 value 已經換成了剛剛算出來的最新推測值！
+    new_date = st.text_input("開獎日期 (YYYY-MM-DD)", value=auto_next_date)
+    new_issue = st.number_input("期數", min_value=1, value=auto_next_issue, step=1)
+    st.markdown("*(輸入順序不拘，系統會自動排序)*")
+    n1 = st.number_input("號碼 1", min_value=1, max_value=39, value=1)
+    n2 = st.number_input("號碼 2", min_value=1, max_value=39, value=2)
+    n3 = st.number_input("號碼 3", min_value=1, max_value=39, value=3)
+    n4 = st.number_input("號碼 4", min_value=1, max_value=39, value=4)
+    n5 = st.number_input("號碼 5", min_value=1, max_value=39, value=5)
+
+    if st.button("🚀 寫入雲端並重新計算"):
+        if not df.empty and new_issue in df['Issue'].values:
+            st.error(f"⚠️ 期數 {new_issue} 已經存在【{game_choice}】資料庫中了！")
+        else:
+            sorted_nums = sorted([n1, n2, n3, n4, n5])
+            new_row = [new_issue, new_date, sorted_nums[0], sorted_nums[1], sorted_nums[2], sorted_nums[3], sorted_nums[4]]
+            with st.spinner(f'正在寫入 {game_choice} Google 雲端資料庫...'):
+                sheet = get_google_sheet(game_choice)
+                sheet.append_row(new_row)
+            st.success(f"✅ 成功將期數 {new_issue} 寫入【{game_choice}】！")
+            st.cache_data.clear()
+            if f"time_machine_{game_choice}" in st.session_state:
+                del st.session_state[f"time_machine_{game_choice}"]
+            st.rerun()
 
 # ==========================================
 # 🔗 連接 Google Sheets 資料庫 (加入分頁動態切換)
@@ -318,3 +379,4 @@ elif page == "📖 核心理論白皮書":
     st.image("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1200&auto=format&fit=crop", caption="結合統計學機率觀念與金融市場趨勢邏輯")
     # (白皮書內文維持不變，省略避免佔用篇幅)
     st.markdown("這套分析方法是將**「股市的技術分析」**與**「彩迷常見的行為心理學」**，完美移植到了彩券的數據模型中...")
+
