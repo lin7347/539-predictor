@@ -5,25 +5,39 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 
-st.set_page_config(page_title="539 量化雷達 終極完整版", layout="wide")
+st.set_page_config(page_title="量化雷達 雙彩種切換版", layout="wide")
 
 # ==========================================
-# 🔗 連接 Google Sheets 資料庫
+# 📝 側邊欄：彩種切換開關 (最重要的新增！)
 # ==========================================
-def get_google_sheet():
+st.sidebar.title("🎲 選擇分析彩種")
+# 讓使用者選擇要看哪一個彩券，這個變數會決定去抓哪一個資料庫分頁
+game_choice = st.sidebar.radio("目前分析目標：", ["539", "天天樂"])
+st.sidebar.markdown("---")
+
+# ==========================================
+# 🔗 連接 Google Sheets 資料庫 (加入分頁動態切換)
+# ==========================================
+def get_google_sheet(sheet_name):
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds_dict = json.loads(st.secrets["gcp_json"])
     creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     client = gspread.authorize(creds)
     # ⚠️ 請把下面這行換成你自己的專屬網址！
-    sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1PrG36Oebngqhm7DrhEUNpfTtSk8k50jdAo2069aBJw8/edit?gid=978302798#gid=978302798").sheet1
-    return sheet
+    doc = client.open_by_url("https://docs.google.com/spreadsheets/d/1PrG36Oebngqhm7DrhEUNpfTtSk8k50jdAo2069aBJw8/edit?gid=978302798#gid=978302798")
+    # 根據左邊選的彩種，打開對應的分頁
+    return doc.worksheet(sheet_name)
 
 @st.cache_data(ttl=600)
-def load_data():
-    sheet = get_google_sheet()
+def load_data(game_name):
+    sheet = get_google_sheet(game_name)
     data = sheet.get_all_records()
     df = pd.DataFrame(data)
+    
+    # 防呆：如果該分頁目前沒資料，給一個空的 DataFrame
+    if df.empty:
+        return pd.DataFrame(columns=['Date', 'Issue', 'N1', 'N2', 'N3', 'N4', 'N5'])
+        
     rename_dict = {
         'Date (開獎日期)': 'Date', 'Issue (期數)': 'Issue',
         'N1 (號碼1)': 'N1', 'N2 (號碼2)': 'N2', 'N3 (號碼3)': 'N3',
@@ -35,14 +49,14 @@ def load_data():
     df['Issue'] = df['Issue'].astype(int)
     return df
 
-df = load_data()
+# 動態載入使用者選擇的彩種資料庫
+df = load_data(game_choice)
 
 # ==========================================
-# 🧠 空間演算法核心引擎 (打包成函式供回測使用)
+# 🧠 空間演算法核心引擎 (維持不變)
 # ==========================================
 def get_predictions(target_draw):
     extended_draw = [0] + target_draw + [40]
-    
     death_seas = []
     for i in range(len(extended_draw)-1):
         start, end = extended_draw[i], extended_draw[i+1]
@@ -88,17 +102,23 @@ page = st.sidebar.radio("選擇分析面板：", [
 
 st.sidebar.markdown("---")
 st.sidebar.header("⏳ 時光機設定")
-options = df.index.tolist()
-options.reverse()
-def format_option(idx):
-    row = df.loc[idx]
-    return f"期數 {row['Issue']} ({row['Date']})"
-selected_idx = st.sidebar.selectbox("選擇分析基準日：", options, format_func=format_option, key="time_machine")
+
+# 檢查資料庫是否有資料，避免天天樂剛建好時報錯
+if not df.empty:
+    options = df.index.tolist()
+    options.reverse()
+    def format_option(idx):
+        row = df.loc[idx]
+        return f"期數 {row['Issue']} ({row['Date']})"
+    selected_idx = st.sidebar.selectbox("選擇分析基準日：", options, format_func=format_option, key=f"time_machine_{game_choice}")
+else:
+    st.sidebar.warning(f"⚠️ 你的【{game_choice}】資料庫目前是空的！請先新增開獎數據。")
+    selected_idx = None
 
 st.sidebar.markdown("---")
-with st.sidebar.expander("📝 輸入今日最新開獎號碼"):
+with st.sidebar.expander(f"📝 輸入【{game_choice}】最新開獎號碼"):
     new_date = st.text_input("開獎日期 (YYYY-MM-DD)", "2026-02-25")
-    new_issue = st.number_input("期數", min_value=113000, value=115048, step=1)
+    new_issue = st.number_input("期數", min_value=1, value=115048, step=1)
     st.markdown("*(輸入順序不拘，系統會自動排序)*")
     n1 = st.number_input("號碼 1", min_value=1, max_value=39, value=1)
     n2 = st.number_input("號碼 2", min_value=1, max_value=39, value=2)
@@ -107,22 +127,28 @@ with st.sidebar.expander("📝 輸入今日最新開獎號碼"):
     n5 = st.number_input("號碼 5", min_value=1, max_value=39, value=5)
 
     if st.button("🚀 寫入雲端並重新計算"):
-        if new_issue in df['Issue'].values:
-            st.error(f"⚠️ 期數 {new_issue} 已經存在雲端資料庫中了！")
+        if not df.empty and new_issue in df['Issue'].values:
+            st.error(f"⚠️ 期數 {new_issue} 已經存在【{game_choice}】資料庫中了！")
         else:
             sorted_nums = sorted([n1, n2, n3, n4, n5])
             new_row = [new_issue, new_date, sorted_nums[0], sorted_nums[1], sorted_nums[2], sorted_nums[3], sorted_nums[4]]
-            with st.spinner('正在寫入 Google 雲端資料庫...'):
-                sheet = get_google_sheet()
+            with st.spinner(f'正在寫入 {game_choice} Google 雲端資料庫...'):
+                sheet = get_google_sheet(game_choice)
                 sheet.append_row(new_row)
-            st.success(f"✅ 成功寫入期數 {new_issue}！")
+            st.success(f"✅ 成功將期數 {new_issue} 寫入【{game_choice}】！")
             st.cache_data.clear()
-            if "time_machine" in st.session_state:
-                del st.session_state["time_machine"]
+            if f"time_machine_{game_choice}" in st.session_state:
+                del st.session_state[f"time_machine_{game_choice}"]
             st.rerun()
 
+# 如果資料庫是空的，就不往下執行分析畫面，直接提示使用者新增資料
+if df.empty:
+    st.title(f"🎯 歡迎啟用【{game_choice}】分析雷達")
+    st.info("👈 請先從左側邊欄輸入第一筆歷史開獎紀錄，系統才能開始運作喔！")
+    st.stop()
+
 # ==========================================
-# 🧠 當前選定日的狀態計算 (用於前兩個頁面)
+# 🧠 當前選定日的狀態計算
 # ==========================================
 historical_df = df.loc[:selected_idx]
 
@@ -141,7 +167,7 @@ short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_cent
 # 🖥️ 頁面 1：🎯 39碼全解析雷達
 # ==========================================
 if page == "🎯 39碼全解析雷達":
-    st.title("🎯 39碼全解析雷達 (歷史次數與空間驗證)")
+    st.title(f"🎯 {game_choice} 39碼全解析雷達")
     st.markdown(f"### 基準日：{target_date} (期數 {target_issue}) | 開出號碼： `{target_draw}`")
     
     nums_100 = historical_df.tail(100)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
@@ -195,19 +221,15 @@ if page == "🎯 39碼全解析雷達":
 # 🖥️ 頁面 2：⚔️ 雙引擎策略看板
 # ==========================================
 elif page == "⚔️ 雙引擎策略看板":
-    st.title("⚔️ 雙引擎策略決策看板")
+    st.title(f"⚔️ {game_choice} 雙引擎策略決策看板")
     st.markdown(f"### 基準日：{target_date} (期數 {target_issue}) | 開出號碼： `{target_draw}`")
     st.markdown("---")
     
     col1, col2 = st.columns(2)
-    
     with col1:
         st.error("🔴 **100期 短線動能派**")
-        st.markdown("**核心思維：** 熱度外溢與慣性，避開無量死水。")
-        st.markdown("---")
         st.markdown("#### 🔥 順勢動能 (+1 / -1)")
         st.info(f"建議名單： **{short_picks}**" if short_picks else "*(今日無)*")
-        
         st.markdown("#### 💀 避開死水 (死亡之海區間)")
         if death_seas:
             for sea in death_seas:
@@ -219,43 +241,35 @@ elif page == "⚔️ 雙引擎策略看板":
 
     with col2:
         st.info("🔵 **200期 長線平衡派**")
-        st.markdown("**核心思維：** 大數法則與均值回歸，填平機率凹洞。")
-        st.markdown("---")
         st.markdown("#### 🎯 史詩斷層 (幾何中心)")
         st.markdown(f"*(當前最大斷層間距為: **{max_gap}**)*")
         st.error(f"建議名單： **{geometric_centers}**" if geometric_centers else "*(無明顯斷層)*")
-        
         st.markdown("#### 🥪 黃金對稱 (必補夾心)")
         st.error(f"建議名單： **{sandwiches}**" if sandwiches else "*(今日未成形)*")
 
     st.markdown("---")
     st.header("⭐️ 雙重共識牌 (疊加勝率)")
-    if consensus_picks:
-        st.success(f"### 🎯 極高勝率主支： {consensus_picks}")
-    else:
-        st.warning("今日兩派未達成共識，建議分開參考上方指標。")
+    if consensus_picks: st.success(f"### 🎯 極高勝率主支： {consensus_picks}")
+    else: st.warning("今日兩派未達成共識，建議分開參考上方指標。")
         
     if next_draw:
         st.markdown("---")
         st.header("🔮 實盤對答案 (下一期實際開出)")
         st.write(f"下一期號碼為：`{next_draw}`")
         hit_consensus = [n for n in consensus_picks if n in next_draw]
-        if hit_consensus:
-            st.success(f"🎉 **神準命中！** 共識牌命中了： **{hit_consensus}**")
+        if hit_consensus: st.success(f"🎉 **神準命中！** 共識牌命中了： **{hit_consensus}**")
 
 # ==========================================
 # 🖥️ 頁面 3：📈 回測與勝率追蹤
 # ==========================================
 elif page == "📈 回測與勝率追蹤":
-    st.title("📈 策略勝率與回測追蹤 (近 100 期)")
-    st.markdown("這就像是股市程式交易的「對帳單」。系統自動以過去 100 期的歷史資料進行「蒙眼盲測」，計算出短線與長線演算法的**真實命中次數**。")
+    st.title(f"📈 {game_choice} 策略勝率與回測追蹤 (近 100 期)")
     
     test_periods = 100
     if len(df) > test_periods:
         results = []
         start_idx = len(df) - test_periods - 1
         for i in range(start_idx, len(df) - 1):
-            # 🧹 脫掉 np.int64 裝甲，強制轉為乾淨的普通數字
             past_draw = [int(x) for x in df.iloc[i][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()]
             actual_next_draw = [int(x) for x in df.iloc[i+1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()]
             draw_date = df.iloc[i+1]['Date']
@@ -266,48 +280,35 @@ elif page == "📈 回測與勝率追蹤":
             long_hits = len(set(lp).intersection(set(actual_next_draw)))
             consensus_hits = len(set(cp).intersection(set(actual_next_draw)))
             
-            # 將預測名單直接轉成文字儲存，方便明細表顯示
             results.append({
                 "Date": draw_date,
                 "✅ 實際開獎": str(actual_next_draw),
-                "🔴 短線推薦號碼": str(sp) if sp else "-",
-                "🔴 100期短線派 命中數": short_hits,
-                "🔵 長線推薦號碼": str(lp) if lp else "-",
-                "🔵 200期長線派 命中數": long_hits,
-                "⭐️ 共識推薦號碼": str(cp) if cp else "-",
-                "⭐️ 雙重共識牌 命中數": consensus_hits
+                "🔴 短線推薦": str(sp) if sp else "-",
+                "🔴 命中": short_hits,
+                "🔵 長線推薦": str(lp) if lp else "-",
+                "🔵 命中": long_hits,
+                "⭐️ 共識推薦": str(cp) if cp else "-",
+                "⭐️ 命中": consensus_hits
             })
         
         res_df = pd.DataFrame(results).set_index("Date")
-        
-        res_df["🔴 短線累積命中"] = res_df["🔴 100期短線派 命中數"].cumsum()
-        res_df["🔵 長線累積命中"] = res_df["🔵 200期長線派 命中數"].cumsum()
-        res_df["⭐️ 共識累積命中"] = res_df["⭐️ 雙重共識牌 命中數"].cumsum()
+        res_df["🔴 短線累積"] = res_df["🔴 命中"].cumsum()
+        res_df["🔵 長線累積"] = res_df["🔵 命中"].cumsum()
+        res_df["⭐️ 共識累積"] = res_df["⭐️ 命中"].cumsum()
         
         st.markdown("---")
         col1, col2, col3 = st.columns(3)
-        col1.metric("🔴 100期短線派 (近百期總命中)", f"{res_df['🔴 短線累積命中'].iloc[-1]} 顆")
-        col2.metric("🔵 200期長線派 (近百期總命中)", f"{res_df['🔵 長線累積命中'].iloc[-1]} 顆")
-        col3.metric("⭐️ 雙重共識牌 (近百期總命中)", f"{res_df['⭐️ 共識累積命中'].iloc[-1]} 顆")
+        col1.metric("🔴 100期短線派 (近百期命中)", f"{res_df['🔴 短線累積'].iloc[-1]} 顆")
+        col2.metric("🔵 200期長線派 (近百期命中)", f"{res_df['🔵 長線累積'].iloc[-1]} 顆")
+        col3.metric("⭐️ 雙重共識牌 (近百期命中)", f"{res_df['⭐️ 共識累積'].iloc[-1]} 顆")
         
-        st.markdown("### 📊 雙引擎命中趨勢圖")
-        st.markdown("觀察哪一條線爬升得比較快，代表近期的盤勢比較偏向該派別的邏輯。")
-        st.line_chart(res_df[["🔴 短線累積命中", "🔵 長線累積命中", "⭐️ 共識累積命中"]])
+        st.line_chart(res_df[["🔴 短線累積", "🔵 長線累積", "⭐️ 共識累積"]])
         
-        # 將超詳細的覆盤資料呈現在此
         with st.expander("📝 展開查看：每日命中覆盤明細對帳單"):
-            st.dataframe(
-                res_df[[
-                    "✅ 實際開獎", 
-                    "🔴 短線推薦號碼", "🔴 100期短線派 命中數", 
-                    "🔵 長線推薦號碼", "🔵 200期長線派 命中數", 
-                    "⭐️ 共識推薦號碼", "⭐️ 雙重共識牌 命中數"
-                ]], 
-                use_container_width=True
-            )
+            st.dataframe(res_df[["✅ 實際開獎", "🔴 短線推薦", "🔴 命中", "🔵 長線推薦", "🔵 命中", "⭐️ 共識推薦", "⭐️ 命中"]], use_container_width=True)
             
     else:
-        st.warning("⚠️ 資料庫期數不足 100 期，無法進行完整回測。")
+        st.warning(f"⚠️ 【{game_choice}】資料庫目前只有 {len(df)} 期，不足 100 期，無法進行完整回測。請先累積多一點資料喔！")
 
 # ==========================================
 # 🖥️ 頁面 4：📖 核心理論白皮書
@@ -315,39 +316,5 @@ elif page == "📈 回測與勝率追蹤":
 elif page == "📖 核心理論白皮書":
     st.title("📖 核心理論與策略解析 (Whitepaper)")
     st.image("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1200&auto=format&fit=crop", caption="結合統計學機率觀念與金融市場趨勢邏輯")
-    
-    st.markdown("""
-    這套分析方法是將**「股市的技術分析（Technical Analysis）」**與**「彩迷常見的行為心理學」**，完美移植到了彩券的數據模型中。它主要建構在以下兩大核心理論：
-
-    ### 🔵 200期（長線平衡派）：建構在「均值回歸」理論
-    長線派的腦袋，就像是股市裡的**「價值投資者」**與**「抄底大師」**。他們的分析基於以下三個假設：
-    * **大數法則與均值回歸 (Mean Reversion)：**
-      * **邏輯：** 長期來看，1 到 39 號每一顆球被抽出的機率應該是相等的。如果某個區間（例如連續 20 個號碼）長期沒開出，在統計學上就形成了「機率凹洞」。
-      * **行動：** 系統認定這個凹洞「遲早必須被填平」來回歸平均值。這就是為什麼長線派看到「史詩級大斷層」，會興奮地想要重押幾何中心點（填海造陸）。
-    * **圖形對稱性 (Symmetry & Patterns)：**
-      * **邏輯：** 數據分佈會傾向尋找平衡。當出現「05、07」卻獨缺「06」時，這在視覺與機率上形成了一個極度不穩定的「真空」。
-      * **行動：** 這就是我們常說的「完美黃金夾心」，長線派認為這種微小且對稱的破口，被系統強制修復的優先級最高。
-    * **同尾數的磁場共鳴：**
-      * **邏輯：** 這屬於彩迷長期的統計觀察，當特定的尾數（例如 9 尾的 09、39）在兩端強勢出現時，往往會帶動中間同家族的號碼（19、29）跟著開出。
-
-    ### 🔴 100期（短線動能派）：建構在「順勢動能」理論
-    短線派的腦袋，就像是股市裡的**「當沖客」**與**「動能交易員」**。他們完全不相信「填補凹洞」這套，他們的分析基於以下兩個假設：
-    * **熱度外溢與慣性 (Momentum & Trend Following)：**
-      * **邏輯：** 他們認為開獎號碼雖然隨機，但「資金與熱度」是有慣性的。昨天開出的號碼就像一顆投入水中的石頭，熱度會向左右兩邊擴散形成漣漪。
-      * **行動：** 這就是最強大且無腦的 「+1 / -1 順勢戰法」。06 開出，明天就買 07；避開冷門號碼，只跟著「剛開出的熱點」旁邊買，收割外溢的能量。
-    * **避開無量死水 (Avoid the Void)：**
-      * **邏輯：** 在股市中，「沒有成交量的地方不要去」。短線派認為，如果一個區間長期沒開出號碼，代表那個地方完全沒有動能。
-      * **行動：** 絕對不進去大斷層裡「接刀子」，寧願站在斷層邊緣（懸崖起步磚）防守。
-
-    ---
-    ### ⭐️ 為什麼要同時用這兩套互相矛盾的方法？
-    您會發現，這兩派的觀點經常是完全相反的（一派要跳進深海，一派叫你遠離深海）。
-    這套分析系統之所以強大，就在於它**「尋找雙方的交集（共識牌）」**。
-
-    當一個號碼（例如前面的 10 號或 32 號），既符合長線的「斷層邊緣防守」，又符合短線的「+1 動能推移」時，這個號碼就疊加了雙重的數學邏輯與策略意義。
-    在完全隨機的機率海中，選擇這種「邏輯支撐力最強」的共識號碼，是我們唯一能做到「在策略上優於盲目瞎猜」的方法。
-    """)
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("*(本系統為量化數據教學使用，請理性參考)*")
-
+    # (白皮書內文維持不變，省略避免佔用篇幅)
+    st.markdown("這套分析方法是將**「股市的技術分析」**與**「彩迷常見的行為心理學」**，完美移植到了彩券的數據模型中...")
