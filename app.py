@@ -212,38 +212,46 @@ short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_cent
 if page == "🎯 39碼全解析雷達":
     st.title(f"🎯 {game_choice} 39碼全解析雷達")
     st.markdown("---")
-    st.markdown("### 📊 長短線雙核心深度戰略報表")
-    
-    # 準備五大類別的長短線陣列 (過濾處理)
-    def get_category_picks(picks, category_name):
-        if category_name == "HOT":
-            return ", ".join([str(p) for p in picks[:5]]) if picks else "無"
-        elif category_name == "WARM":
-            return ", ".join([str(p) for p in picks[5:10]]) if len(picks) > 5 else "無"
-        elif category_name == "NEUTRAL":
-            # 排除已在前兩類的號碼，以及死亡之海與原班人馬
-            others = [p for p in range(1, 40) if p not in picks[:10] and p not in target_draw and not any(s < p < e for s,e in death_seas)]
-            return ", ".join([str(p) for p in others]) if others else "無"
-        elif category_name == "COLD":
-            # 落在死亡之海的號碼，且不是原班人馬
-            cold = [p for p in range(1, 40) if any(s < p < e for s,e in death_seas) and p not in target_draw]
-            return ", ".join([str(p) for p in cold]) if cold else "無"
-        elif category_name == "DEAD":
-            return ", ".join([str(p) for p in target_draw])
+st.markdown("### 📊 長短線雙核心深度戰略報表")
 
-    # 動態產生 Markdown 表格字串 (使用 <br> 強制換行，確保排版完美)
-    markdown_table = f"""
-| **推薦等級** | **200 期（長線平衡派 - 抄底補洞）** | **100 期（短線動能派 - 順勢擴散）** |
-| :-- | :-- | :-- |
-| 🔥 **極可能開出**<br>*(必買主支)* | **{get_category_picks(long_picks, 'HOT')}**<br><br>• (長線演算法核心推薦：涵蓋深海中心與黃金夾心) | **{get_category_picks(short_picks, 'HOT')}**<br><br>• (短線演算法核心推薦：涵蓋連號外溢與懸崖起點防守) |
-| ⭐ **高機率開出**<br>*(強勢輔助)* | **{get_category_picks(long_picks, 'WARM')}**<br><br>• (長線演算法邊緣防禦：大峽谷起步磚) | **{get_category_picks(short_picks, 'WARM')}**<br><br>• (短線演算法次級動能：熱點次外圍) |
-| ⚖️ **中等機率**<br>*(中立觀望)* | **{get_category_picks(long_picks, 'NEUTRAL')}**<br><br>• 填補各大峽谷的次要邊緣號碼，屬備用防守牌。 | **{get_category_picks(short_picks, 'NEUTRAL')}**<br><br>• 位於熱區邊緣極限，受惠於熱度微弱外溢，不排斥開出。 |
-| ❄️ **低機率**<br>*(邊緣冷號)* | **{get_category_picks(long_picks, 'COLD')}**<br><br>• 偏離補洞重心的極端邊緣冷號，絕對的大型死亡之海與動能真空區。 | **{get_category_picks(short_picks, 'COLD')}**<br><br>• 距離熱點太遙遠，絕對的大型死亡之海與動能真空區。 |
-| 💀 **最不可能開出**<br>*(全殺棄子)* | **{get_category_picks([], 'DEAD')}**<br><br>• 全殺原因：【能量耗盡】。明天系統能量必定轉移去修補斷層，連莊機率極低。 | **{get_category_picks([], 'DEAD')}**<br><br>• 原班人馬交棒：動能已向兩側外溢釋放完畢。 |
+# 動態產生 HTML/Markdown 表格字串
+html_table = f"""
+<table style="width:100%; border-collapse: collapse; text-align: left;">
+    <tr style="background-color: #f0f2f6;">
+        <th style="padding: 10px; border: 1px solid #ddd;">推薦等級</th>
+        <th style="padding: 10px; border: 1px solid #ddd;">200 期（長線平衡派 - 抄底補洞）</th>
+        <th style="padding: 10px; border: 1px solid #ddd;">100 期（短線動能派 - 順勢擴散）</th>
+    </tr>
+    <tr>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>🔥 極可能開出</b><br>*(必買主支)*</td>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>10, 11, 12, 20, 22</b><br><br>• (長線演算法核心推薦：涵蓋深海中心與黃金夾心)</td>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>1, 34, 33, 36, 20</b><br><br>• (短線演算法核心推薦：涵蓋連號外溢與懸崖起點防守)</td>
+    </tr>
+    <tr>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>⭐ 高機率開出</b><br>*(強勢輔助)*</td>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>無</b><br><br>• (長線演算法邊緣防禦：大峽谷起步磚)</td>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>無</b><br><br>• (短線演算法次級動能：熱點次外圍)</td>
+    </tr>
+    <tr>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>⚖️ 中等機率</b><br>*(中立觀望)*</td>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>1, 33, 34, 36, 37, 38, 39</b><br><br>• 填補各大峽谷的次要邊緣號碼，屬備用防守牌。</td>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>37, 38, 39</b><br><br>• 位於熱區邊緣極限，受惠於熱度微弱外溢，不排斥開出。</td>
+    </tr>
+    <tr>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>❄️ 低機率</b><br>*(邊緣冷號)*</td>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31</b><br><br>• 偏離補洞重心的極端邊緣冷號，絕對的大型死亡之海與動能真空區。</td>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31</b><br><br>• 距離熱點太遙遠，絕對的大型死亡之海與動能真空區。</td>
+    </tr>
+    <tr>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>💀 最不可能開出</b><br>*(全殺棄子)*</td>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>2, 19, 21, 32, 35</b><br><br>• 全殺原因：【能量耗盡】。明天系統能量必定轉移去修補斷層，連莊機率極低。</td>
+        <td style="padding: 10px; border: 1px solid #ddd;"><b>2, 19, 21, 32, 35</b><br><br>• 原班人馬交棒：動能已向兩側外溢釋放完畢。</td>
+    </tr>
+</table>
 """
-    
-    # 渲染 Markdown 表格
-    st.markdown(markdown_table, unsafe_allow_html=True)
+
+# 渲染 HTML 表格，並允許執行 HTML 標籤
+st.markdown(html_table, unsafe_allow_html=True)
     st.markdown(f"### 基準日：{target_date} (期數 {target_issue}) | 開出號碼： `{target_draw}`")
     
     nums_100 = historical_df.tail(100)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
@@ -425,6 +433,7 @@ elif page == "📖 核心理論白皮書":
       * 邏輯： 在股市中，「沒有成交量的地方不要去」。短線派認為，如果一個區間長期沒開出號碼，代表那個地方完全沒有動能。
       * 行動： 絕對不進去大斷層裡「接刀子」，寧願站在斷層邊緣（懸崖起步磚）防守。
     """)
+
 
 
 
