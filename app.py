@@ -211,6 +211,22 @@ short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_cent
 # ==========================================
 if page == "🎯 39碼全解析雷達":
     st.title(f"🎯 {game_choice} 39碼全解析雷達")
+    st.markdown("---")
+    st.markdown("### 📊 長短線雙核心深度對比戰報")
+    
+    # 動態產生 Markdown 表格字串
+    markdown_table = f"""
+| **推薦等級** | **200 期（長線平衡派 - 抄底補洞）** | **100 期（短線動能派 - 順勢擴散）** |
+| :-- | :-- | :-- |
+| 🔥 **極可能開出**<br>*(必買主支)* | **{', '.join(map(str, long_picks[:5]))}**<br><br>*(長線演算法核心推薦：涵蓋深海中心與黃金夾心)* | **{', '.join(map(str, short_picks[:5]))}**<br><br>*(短線演算法核心推薦：涵蓋連號外溢與懸崖起點防守)* |
+| ⭐ **高機率開出**<br>*(強勢輔助)* | **{', '.join(map(str, long_picks[5:10]))}**<br><br>*(長線演算法邊緣防禦：大峽谷起步磚)* | **{', '.join(map(str, short_picks[5:10]))}**<br><br>*(短線演算法次級動能：熱點次外圍)* |
+| ⚖️ **中等機率**<br>*(中立觀望)* | *(其餘非斷層邊緣號碼，視為備用防守牌)* | *(其餘熱區外圍極限，受惠於微弱外溢)* |
+| ❄️ **低機率**<br>*(邊緣冷號)* | *(極端冷區邊緣)* | *(絕對死亡之海)* |
+| 💀 **最不可能開出**<br>*(全殺棄子)* | **{', '.join(map(str, target_draw))}**<br><br>*(能量耗盡：今日開出號碼，明日回歸機率極低)* | **{', '.join(map(str, target_draw))}**<br><br>*(能量耗盡：今日開出號碼，明日回歸機率極低)* |
+"""
+    
+    # 渲染 Markdown 表格
+    st.markdown(markdown_table, unsafe_allow_html=True)
     st.markdown(f"### 基準日：{target_date} (期數 {target_issue}) | 開出號碼： `{target_draw}`")
     
     nums_100 = historical_df.tail(100)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
@@ -392,3 +408,4 @@ elif page == "📖 核心理論白皮書":
       * 邏輯： 在股市中，「沒有成交量的地方不要去」。短線派認為，如果一個區間長期沒開出號碼，代表那個地方完全沒有動能。
       * 行動： 絕對不進去大斷層裡「接刀子」，寧願站在斷層邊緣（懸崖起步磚）防守。
     """)
+
