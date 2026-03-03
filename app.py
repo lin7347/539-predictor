@@ -217,29 +217,29 @@ if page == "🎯 39碼全解析雷達":
     # 準備五大類別的長短線陣列 (過濾處理)
     def get_category_picks(picks, category_name):
         if category_name == "HOT":
-            return [str(p) for p in picks[:5]] if picks else ["無"]
+            return ", ".join([str(p) for p in picks[:5]]) if picks else "無"
         elif category_name == "WARM":
-            return [str(p) for p in picks[5:10]] if len(picks) > 5 else ["無"]
+            return ", ".join([str(p) for p in picks[5:10]]) if len(picks) > 5 else "無"
         elif category_name == "NEUTRAL":
             # 排除已在前兩類的號碼，以及死亡之海與原班人馬
             others = [p for p in range(1, 40) if p not in picks[:10] and p not in target_draw and not any(s < p < e for s,e in death_seas)]
-            return [str(p) for p in others] if others else ["無"]
+            return ", ".join([str(p) for p in others]) if others else "無"
         elif category_name == "COLD":
-            # 落在死亡之海的號碼
+            # 落在死亡之海的號碼，且不是原班人馬
             cold = [p for p in range(1, 40) if any(s < p < e for s,e in death_seas) and p not in target_draw]
-            return [str(p) for p in cold] if cold else ["無"]
+            return ", ".join([str(p) for p in cold]) if cold else "無"
         elif category_name == "DEAD":
-            return [str(p) for p in target_draw]
+            return ", ".join([str(p) for p in target_draw])
 
-    # 動態產生 Markdown 表格字串 (無使用 <br>，適用於所有版面)
+    # 動態產生 Markdown 表格字串 (使用 <br> 強制換行，確保排版完美)
     markdown_table = f"""
 | **推薦等級** | **200 期（長線平衡派 - 抄底補洞）** | **100 期（短線動能派 - 順勢擴散）** |
 | :-- | :-- | :-- |
-| 🔥 **極可能開出**<br>*(必買主支)* | **{', '.join(get_category_picks(long_picks, 'HOT'))}**<br><br>* (長線演算法核心推薦：涵蓋深海中心與黃金夾心) | **{', '.join(get_category_picks(short_picks, 'HOT'))}**<br><br>* (短線演算法核心推薦：涵蓋連號外溢與懸崖起點防守) |
-| ⭐ **高機率開出**<br>*(強勢輔助)* | **{', '.join(get_category_picks(long_picks, 'WARM'))}**<br><br>* (長線演算法邊緣防禦：大峽谷起步磚) | **{', '.join(get_category_picks(short_picks, 'WARM'))}**<br><br>* (短線演算法次級動能：熱點次外圍) |
-| ⚖️ **中等機率**<br>*(中立觀望)* | **{', '.join(get_category_picks(long_picks, 'NEUTRAL'))}**<br><br>* 填補各大峽谷的次要邊緣號碼，屬備用防守牌。 | **{', '.join(get_category_picks(short_picks, 'NEUTRAL'))}**<br><br>* 位於熱區邊緣極限，受惠於熱度微弱外溢，不排斥開出。 |
-| ❄️ **低機率**<br>*(邊緣冷號)* | **{', '.join(get_category_picks(long_picks, 'COLD'))}**<br><br>* 偏離補洞重心的極端邊緣冷號，絕對的大型死亡之海與動能真空區。 | **{', '.join(get_category_picks(short_picks, 'COLD'))}**<br><br>* 距離熱點太遙遠，絕對的大型死亡之海與動能真空區。 |
-| 💀 **最不可能開出**<br>*(全殺棄子)* | **{', '.join(get_category_picks([], 'DEAD'))}**<br><br>* 全殺原因：【能量耗盡】。明天系統能量必定轉移去修補斷層，連莊機率極低。 | **{', '.join(get_category_picks([], 'DEAD'))}**<br><br>* 原班人馬交棒：動能已向兩側外溢釋放完畢。 |
+| 🔥 **極可能開出**<br>*(必買主支)* | **{get_category_picks(long_picks, 'HOT')}**<br><br>• (長線演算法核心推薦：涵蓋深海中心與黃金夾心) | **{get_category_picks(short_picks, 'HOT')}**<br><br>• (短線演算法核心推薦：涵蓋連號外溢與懸崖起點防守) |
+| ⭐ **高機率開出**<br>*(強勢輔助)* | **{get_category_picks(long_picks, 'WARM')}**<br><br>• (長線演算法邊緣防禦：大峽谷起步磚) | **{get_category_picks(short_picks, 'WARM')}**<br><br>• (短線演算法次級動能：熱點次外圍) |
+| ⚖️ **中等機率**<br>*(中立觀望)* | **{get_category_picks(long_picks, 'NEUTRAL')}**<br><br>• 填補各大峽谷的次要邊緣號碼，屬備用防守牌。 | **{get_category_picks(short_picks, 'NEUTRAL')}**<br><br>• 位於熱區邊緣極限，受惠於熱度微弱外溢，不排斥開出。 |
+| ❄️ **低機率**<br>*(邊緣冷號)* | **{get_category_picks(long_picks, 'COLD')}**<br><br>• 偏離補洞重心的極端邊緣冷號，絕對的大型死亡之海與動能真空區。 | **{get_category_picks(short_picks, 'COLD')}**<br><br>• 距離熱點太遙遠，絕對的大型死亡之海與動能真空區。 |
+| 💀 **最不可能開出**<br>*(全殺棄子)* | **{get_category_picks([], 'DEAD')}**<br><br>• 全殺原因：【能量耗盡】。明天系統能量必定轉移去修補斷層，連莊機率極低。 | **{get_category_picks([], 'DEAD')}**<br><br>• 原班人馬交棒：動能已向兩側外溢釋放完畢。 |
 """
     
     # 渲染 Markdown 表格
@@ -425,5 +425,6 @@ elif page == "📖 核心理論白皮書":
       * 邏輯： 在股市中，「沒有成交量的地方不要去」。短線派認為，如果一個區間長期沒開出號碼，代表那個地方完全沒有動能。
       * 行動： 絕對不進去大斷層裡「接刀子」，寧願站在斷層邊緣（懸崖起步磚）防守。
     """)
+
 
 
