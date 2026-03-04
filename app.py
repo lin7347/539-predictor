@@ -227,8 +227,8 @@ if page == "🎯 39碼全解析雷達":
             others = [p for p in range(1, 40) if p not in sorted_picks[:10] and p not in target_draw and not any(s < p < e for s,e in death_seas)]
             return ", ".join([str(p) for p in others]) if others else "無"
         elif category_name == "COLD":
-            # 落在死亡之海的號碼，且不是原班人馬
-            cold = [p for p in range(1, 40) if any(s < p < e for s,e in death_seas) and p not in target_draw]
+            # 💡 終極修正：落在死亡之海的號碼，不能是原班人馬，且「不能是已經被提拔為 HOT/WARM 的主推號碼」！
+            cold = [p for p in range(1, 40) if any(s < p < e for s,e in death_seas) and p not in target_draw and p not in sorted_picks[:10]]
             return ", ".join([str(p) for p in cold]) if cold else "無"
         elif category_name == "DEAD":
             return ", ".join([str(p) for p in target_draw])
@@ -427,6 +427,7 @@ elif page == "📖 核心理論白皮書":
       * 邏輯： 在股市中，「沒有成交量的地方不要去」。短線派認為，如果一個區間長期沒開出號碼，代表那個地方完全沒有動能。
       * 行動： 絕對不進去大斷層裡「接刀子」，寧願站在斷層邊緣（懸崖起步磚）防守。
     """)
+
 
 
 
