@@ -62,11 +62,11 @@ def get_predictions(target_draw):
     target_draw = sorted(target_draw)
     extended_draw = [0] + target_draw + [40]
     
-    # 1. 尋找死亡之海 (大於 5 碼的斷層)
+    # 🌟 實戰優化 A：放寬死亡之海標準 (大於 7 碼才算深海，讓號碼分佈更平均)
     death_seas = []
     for i in range(len(extended_draw)-1):
         start, end = extended_draw[i], extended_draw[i+1]
-        if end - start - 1 > 5: death_seas.append((start, end))
+        if end - start - 1 > 7: death_seas.append((start, end))
             
     # 2. 短線順勢 (+1 / -1)
     short_picks = []
@@ -74,6 +74,9 @@ def get_predictions(target_draw):
         for c in [n-1, n+1]:
             if 1 <= c <= 39 and not any(sea_start < c < sea_end for sea_start, sea_end in death_seas):
                 short_picks.append(int(c))
+    
+    # 🌟 實戰優化 B：擁抱連莊慣性！把昨日開出的號碼直接加入短線動能觀察池
+    short_picks.extend(target_draw)
     short_picks = list(set(short_picks))
             
     # 3. 尋找完美夾心缺口
@@ -93,11 +96,9 @@ def get_predictions(target_draw):
             geometric_centers.extend([int(np.floor(center)), int(np.ceil(center))] if center % 1 != 0 else [int(center)])
     geometric_centers = [int(c) for c in geometric_centers if 1 <= c <= 39]
 
-    # ==========================================
-    # 🌟 升級 2：新增同尾數共鳴演算法
-    # ==========================================
+    # 5. 同尾數共鳴演算法
     tails = [n % 10 for n in target_draw]
-    hot_tails = [t for t in set(tails) if tails.count(t) >= 2] # 找出出現 2 次以上的尾數
+    hot_tails = [t for t in set(tails) if tails.count(t) >= 2]
     
     tail_resonances = []
     if hot_tails:
@@ -106,13 +107,7 @@ def get_predictions(target_draw):
                 if n % 10 == t:
                     tail_resonances.append(n)
 
-    # ==========================================
-    # 🚨 升級 3：強制剔除「能量耗盡的原班人馬」
-    # ==========================================
-    short_picks = [p for p in short_picks if p not in target_draw]
-    sandwiches = [p for p in sandwiches if p not in target_draw]
-    geometric_centers = [p for p in geometric_centers if p not in target_draw]
-    tail_resonances = [p for p in tail_resonances if p not in target_draw]
+    # (原本在這裡的「強制剔除原班人馬」程式碼已經徹底刪除，連莊號正式解放！)
 
     # 彙整長線與共識牌
     long_picks = list(set(geometric_centers + sandwiches + tail_resonances))
@@ -427,6 +422,7 @@ elif page == "📖 核心理論白皮書":
       * 邏輯： 在股市中，「沒有成交量的地方不要去」。短線派認為，如果一個區間長期沒開出號碼，代表那個地方完全沒有動能。
       * 行動： 絕對不進去大斷層裡「接刀子」，寧願站在斷層邊緣（懸崖起步磚）防守。
     """)
+
 
 
 
