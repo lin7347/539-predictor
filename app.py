@@ -223,6 +223,44 @@ else:
     next_draw = []
 
 short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, tail_resonances, max_gap = get_predictions(target_draw, death_sea_gap, include_repeat)
+# ==========================================
+# 🧠 當前選定日的狀態計算
+# ==========================================
+historical_df = df.loc[:selected_idx]
+
+target_draw = historical_df.iloc[-1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
+target_date = historical_df.iloc[-1]['Date']
+target_issue = historical_df.iloc[-1]['Issue']
+
+if selected_idx + 1 < len(df):
+    next_draw = df.loc[selected_idx + 1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
+else:
+    next_draw = []
+
+short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, tail_resonances, max_gap = get_predictions(target_draw, death_sea_gap, include_repeat)
+
+# 🔽🔽🔽 從這裡開始新增「十大殺牌」邏輯 🔽🔽🔽
+
+# 1. 取得近 100 期所有號碼的開出次數 (作為冷門度評分標準)
+nums_100 = historical_df.tail(100)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
+s_100 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_100).value_counts(), fill_value=0).astype(int)
+
+# 2. 定義深海區與中立區的候選名單
+cold_nums = [p for p in range(1, 40) if any(s < p < e for s,e in death_seas) and p not in target_draw and p not in short_picks[:10] and p not in long_picks[:10]]
+neutral_nums = [p for p in range(1, 40) if p not in target_draw and p not in short_picks[:10] and p not in long_picks[:10] and p not in cold_nums]
+
+# 3. 依照 100 期「開出次數最少」來排序 (越少越前面 = 越冷)
+cold_sorted = sorted(cold_nums, key=lambda x: s_100[x])
+neutral_sorted = sorted(neutral_nums, key=lambda x: s_100[x])
+
+# 4. 組合最毒名單 (不連莊的昨日號碼 -> 最冷深海號 -> 最冷中立號)
+dead_pool = target_draw if not include_repeat else []
+worst_10_pool = dead_pool + cold_sorted + neutral_sorted
+
+# 5. 精準截取前 10 名，並從小到大排序方便閱讀
+worst_10_picks = sorted(worst_10_pool[:10])
+
+# 🔼🔼🔼 新增邏輯結束 🔼🔼🔼
 
 # ==========================================
 # 🖥️ 頁面 1：🎯 39碼全解析雷達
@@ -231,9 +269,17 @@ if page == "🎯 39碼全解析雷達":
     st.title(f"🎯 {game_choice} 39碼全解析雷達")
     st.markdown(f"### 基準日：{target_date} (期數 {target_issue}) | 開出號碼： `{target_draw}`")
     
-    # === 原本的 Dataframe 隱藏或保留，這裡直接進入全新的動態 HTML 戰略報表 ===
+    # 🔽🔽🔽 新增這段紅色警告框 🔽🔽🔽
+    st.error(f"""
+    ### 🛑 系統強烈警告：十大避開地雷 (終極殺牌)
+    經過歷史頻率與死亡之海深度交叉比對，以下 10 個號碼動能極度冰凍，建議建構投資組合時 **優先剔除**：
+    ## **{', '.join([str(n) for n in worst_10_picks])}**
+    """)
+    # 🔼🔼🔼 新增結束 🔼🔼🔼
+
     st.markdown("---")
     st.markdown("### 📊 長短線雙核心深度戰略報表 (實戰動態微調版)")
+    
     
     # 嚴格過濾、保證無重複且自動排序
     def get_category_picks(picks, category_name):
