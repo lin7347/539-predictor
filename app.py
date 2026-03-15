@@ -72,13 +72,13 @@ def load_data(game_name):
 df = load_data(game_choice)
 
 # ==========================================
-# 🧠 空間演算法核心引擎 (動態參數版)
+# 🧠 空間演算法核心引擎 (✨ 十大殺牌整合版)
 # ==========================================
-def get_predictions(target_draw, gap_limit, allow_repeat):
+def get_predictions(target_draw, gap_limit, allow_repeat, s_100_series):
     target_draw = sorted(target_draw)
     extended_draw = [0] + target_draw + [40]
     
-    # 1. 尋找死亡之海 (使用面板設定的 gap_limit)
+    # 1. 尋找死亡之海
     death_seas = []
     for i in range(len(extended_draw)-1):
         start, end = extended_draw[i], extended_draw[i+1]
@@ -92,7 +92,6 @@ def get_predictions(target_draw, gap_limit, allow_repeat):
             if 1 <= c <= 39 and not any(sea_start < c < sea_end for sea_start, sea_end in death_seas):
                 short_picks.append(int(c))
                 
-    # 🌟 動態決定是否擁抱連莊慣性
     if allow_repeat:
         short_picks.extend(target_draw)
         
@@ -126,7 +125,6 @@ def get_predictions(target_draw, gap_limit, allow_repeat):
                 if n % 10 == t:
                     tail_resonances.append(n)
 
-    # 如果不允許連莊，則從長線名單中剔除原班人馬
     if not allow_repeat:
         short_picks = [p for p in short_picks if p not in target_draw]
         sandwiches = [p for p in sandwiches if p not in target_draw]
@@ -136,7 +134,25 @@ def get_predictions(target_draw, gap_limit, allow_repeat):
     long_picks = list(set(geometric_centers + sandwiches + tail_resonances))
     consensus_picks = sorted(list(set(short_picks).intersection(set(long_picks))))
     
-    return short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, tail_resonances, max_gap
+    # 🚨 6. 萃取「十大避開地雷 (終極殺牌)」
+    worst_10_picks = []
+    if s_100_series is not None:
+        # 過濾掉短線、長線可能看好的牌，找出純冷號與中立號
+        cold_nums = [p for p in range(1, 40) if any(s < p < e for s,e in death_seas) and p not in target_draw and p not in short_picks[:10] and p not in long_picks[:10]]
+        neutral_nums = [p for p in range(1, 40) if p not in target_draw and p not in short_picks[:10] and p not in long_picks[:10] and p not in cold_nums]
+        
+        # 依據百期開出頻率，由冷到熱排序
+        cold_sorted = sorted(cold_nums, key=lambda x: s_100_series.get(x, 0))
+        neutral_sorted = sorted(neutral_nums, key=lambda x: s_100_series.get(x, 0))
+        
+        # 組合毒藥名單 (如果關閉連莊，昨日號碼最毒 -> 深海最冷號 -> 中立最冷號)
+        dead_pool = target_draw if not allow_repeat else []
+        worst_10_pool = dead_pool + cold_sorted + neutral_sorted
+        
+        # 取前 10 毒，並排序方便閱讀
+        worst_10_picks = sorted(worst_10_pool[:10])
+    
+    return short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, tail_resonances, max_gap, worst_10_picks
 
 # ==========================================
 # 📝 側邊欄設定區 (導覽、時光機、新增數據)
@@ -222,45 +238,11 @@ if selected_idx + 1 < len(df):
 else:
     next_draw = []
 
-short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, tail_resonances, max_gap = get_predictions(target_draw, death_sea_gap, include_repeat)
-# ==========================================
-# 🧠 當前選定日的狀態計算
-# ==========================================
-historical_df = df.loc[:selected_idx]
-
-target_draw = historical_df.iloc[-1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
-target_date = historical_df.iloc[-1]['Date']
-target_issue = historical_df.iloc[-1]['Issue']
-
-if selected_idx + 1 < len(df):
-    next_draw = df.loc[selected_idx + 1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
-else:
-    next_draw = []
-
-short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, tail_resonances, max_gap = get_predictions(target_draw, death_sea_gap, include_repeat)
-
-# 🔽🔽🔽 從這裡開始新增「十大殺牌」邏輯 🔽🔽🔽
-
-# 1. 取得近 100 期所有號碼的開出次數 (作為冷門度評分標準)
+# 算出近 100 期頻率，餵給引擎計算殺牌
 nums_100 = historical_df.tail(100)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
 s_100 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_100).value_counts(), fill_value=0).astype(int)
 
-# 2. 定義深海區與中立區的候選名單
-cold_nums = [p for p in range(1, 40) if any(s < p < e for s,e in death_seas) and p not in target_draw and p not in short_picks[:10] and p not in long_picks[:10]]
-neutral_nums = [p for p in range(1, 40) if p not in target_draw and p not in short_picks[:10] and p not in long_picks[:10] and p not in cold_nums]
-
-# 3. 依照 100 期「開出次數最少」來排序 (越少越前面 = 越冷)
-cold_sorted = sorted(cold_nums, key=lambda x: s_100[x])
-neutral_sorted = sorted(neutral_nums, key=lambda x: s_100[x])
-
-# 4. 組合最毒名單 (不連莊的昨日號碼 -> 最冷深海號 -> 最冷中立號)
-dead_pool = target_draw if not include_repeat else []
-worst_10_pool = dead_pool + cold_sorted + neutral_sorted
-
-# 5. 精準截取前 10 名，並從小到大排序方便閱讀
-worst_10_picks = sorted(worst_10_pool[:10])
-
-# 🔼🔼🔼 新增邏輯結束 🔼🔼🔼
+short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, tail_resonances, max_gap, worst_10_picks = get_predictions(target_draw, death_sea_gap, include_repeat, s_100)
 
 # ==========================================
 # 🖥️ 頁面 1：🎯 39碼全解析雷達
@@ -269,32 +251,24 @@ if page == "🎯 39碼全解析雷達":
     st.title(f"🎯 {game_choice} 39碼全解析雷達")
     st.markdown(f"### 基準日：{target_date} (期數 {target_issue}) | 開出號碼： `{target_draw}`")
     
-    # 🔽🔽🔽 新增這段紅色警告框 🔽🔽🔽
     st.error(f"""
     ### 🛑 系統強烈警告：十大避開地雷 (終極殺牌)
-    經過歷史頻率與死亡之海深度交叉比對，以下 10 個號碼動能極度冰凍，建議建構投資組合時 **優先剔除**：
+    經過歷史頻率與死亡之海深度交叉比對，以下 10 個號碼動能極度冰凍，建議建構組合時 **優先剔除**：
     ## **{', '.join([str(n) for n in worst_10_picks])}**
     """)
-    # 🔼🔼🔼 新增結束 🔼🔼🔼
 
     st.markdown("---")
     st.markdown("### 📊 長短線雙核心深度戰略報表 (實戰動態微調版)")
     
-    
-    # 嚴格過濾、保證無重複且自動排序
     def get_category_picks(picks, category_name):
         sorted_picks = sorted(list(set(picks))) if picks else []
-        
-        if category_name == "HOT":
-            return ", ".join([str(p) for p in sorted_picks[:5]]) if sorted_picks else "無"
-        elif category_name == "WARM":
-            return ", ".join([str(p) for p in sorted_picks[5:10]]) if len(sorted_picks) > 5 else "無"
+        if category_name == "HOT": return ", ".join([str(p) for p in sorted_picks[:5]]) if sorted_picks else "無"
+        elif category_name == "WARM": return ", ".join([str(p) for p in sorted_picks[5:10]]) if len(sorted_picks) > 5 else "無"
         elif category_name == "REPEAT_OR_DEAD":
             if include_repeat:
                 repeats = [p for p in target_draw if p not in sorted_picks[:10]]
                 return ", ".join([str(p) for p in repeats]) if repeats else "無 (皆已升級為主推)"
-            else:
-                return ", ".join([str(p) for p in target_draw])
+            else: return ", ".join([str(p) for p in target_draw])
         elif category_name == "NEUTRAL":
             others = [p for p in range(1, 40) if p not in sorted_picks[:10] and p not in target_draw and not any(s < p < e for s,e in death_seas)]
             return ", ".join([str(p) for p in others]) if others else "無"
@@ -302,12 +276,10 @@ if page == "🎯 39碼全解析雷達":
             cold = [p for p in range(1, 40) if any(s < p < e for s,e in death_seas) and p not in target_draw and p not in sorted_picks[:10]]
             return ", ".join([str(p) for p in cold]) if cold else "無"
 
-    # 動態決定第三列的標題與敘述
     row3_icon = "♻️ **連莊觀察區**<br>*(昨日開出)*" if include_repeat else "💀 **最不可能開出**<br>*(全殺棄子)*"
     row3_long_desc = "• (長線視角：保留慣性，觀察連莊潛力)" if include_repeat else "• 全殺原因：【能量耗盡】。明天系統能量必定轉移，連莊機率極低。"
     row3_short_desc = "• (短線視角：保留慣性動能，具備連莊潛力)" if include_repeat else "• 原班人馬交棒：動能已向兩側外溢釋放完畢。"
 
-    # 動態產生 HTML 表格字串 (解決 Markdown 排版不穩定的問題)
     html_table = f"""
     <table style="width:100%; border-collapse: collapse; text-align: left; font-size: 16px;">
         <tr style="background-color: #f0f2f6;">
@@ -342,7 +314,6 @@ if page == "🎯 39碼全解析雷達":
         </tr>
     </table>
     """
-    
     st.markdown(html_table, unsafe_allow_html=True)
 
 # ==========================================
@@ -369,7 +340,7 @@ elif page == "⚔️ 雙引擎策略看板":
 
     with col2:
         st.info("🔵 200期 長線平衡派")
-        st.markdown("#### 🎯 史詩斷層 (幾何中心)")
+        st.markdown("#### 🎯 史兆斷層 (幾何中心)")
         st.markdown(f"*(當前最大斷層間距為: {max_gap})*")
         st.error(f"建議名單： {geometric_centers}" if geometric_centers else "*(無明顯斷層)*")
         st.markdown("#### 🥪 黃金對稱 (必補夾心)")
@@ -393,7 +364,7 @@ elif page == "⚔️ 雙引擎策略看板":
 # 🖥️ 頁面 3：📈 回測與勝率追蹤
 # ==========================================
 elif page == "📈 回測與勝率追蹤":
-    st.title(f"📈 {game_choice} 策略勝率與回測追蹤 (近 100 期)")
+    st.title(f"📈 {game_choice} 策略勝率與殺牌回測追蹤 (近 100 期)")
     
     test_periods = 100
     if len(df) > test_periods:
@@ -404,12 +375,22 @@ elif page == "📈 回測與勝率追蹤":
             actual_next_draw = [int(x) for x in df.iloc[i+1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()]
             draw_date = df.iloc[i+1]['Date']
             
-            # 回測時也要套用側邊欄的動態參數！
-            sp, lp, cp, _, _, _, _, _ = get_predictions(past_draw, death_sea_gap, include_repeat)
+            # 準備回測當時的歷史頻率資料給殺牌引擎
+            historical_for_backtest = df.iloc[max(0, i-100):i+1]
+            nums_100_bt = historical_for_backtest[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
+            s_100_bt = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_100_bt).value_counts(), fill_value=0).astype(int)
             
+            # 執行預測 (包含十大殺牌)
+            sp, lp, cp, _, _, _, _, _, worst_10 = get_predictions(past_draw, death_sea_gap, include_repeat, s_100_bt)
+            
+            # 計算正向命中數
             short_hits = len(set(sp).intersection(set(actual_next_draw)))
             long_hits = len(set(lp).intersection(set(actual_next_draw)))
             consensus_hits = len(set(cp).intersection(set(actual_next_draw)))
+            
+            # 計算殺牌成功數 (10顆裡面，有幾顆「沒有」開出來)
+            kill_fails = len(set(worst_10).intersection(set(actual_next_draw)))
+            successful_kills = 10 - kill_fails
             
             results.append({
                 "Date": draw_date,
@@ -419,7 +400,9 @@ elif page == "📈 回測與勝率追蹤":
                 "🔵 長線推薦": str(lp) if lp else "-",
                 "🔵 命中": long_hits,
                 "⭐️ 共識推薦": str(cp) if cp else "-",
-                "⭐️ 命中": consensus_hits
+                "⭐️ 命中": consensus_hits,
+                "💀 十大殺牌": str(worst_10) if worst_10 else "-",
+                "🛡️ 成功閃避": successful_kills # 數值 10 代表完美殺牌！
             })
         
         res_df = pd.DataFrame(results).set_index("Date")
@@ -427,16 +410,24 @@ elif page == "📈 回測與勝率追蹤":
         res_df["🔵 長線累積"] = res_df["🔵 命中"].cumsum()
         res_df["⭐️ 共識累積"] = res_df["⭐️ 命中"].cumsum()
         
+        # 殺牌防守率計算：累積成功閃避次數 / (回測期數 * 10)
+        total_kills_attempted = len(res_df) * 10
+        total_successful_kills = res_df["🛡️ 成功閃避"].sum()
+        kill_defense_rate = (total_successful_kills / total_kills_attempted) * 100
+        
         st.markdown("---")
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         col1.metric("🔴 短線派累積命中", f"{res_df['🔴 短線累積'].iloc[-1]} 顆")
         col2.metric("🔵 長線派累積命中", f"{res_df['🔵 長線累積'].iloc[-1]} 顆")
-        col3.metric("⭐️ 雙重共識累積命中", f"{res_df['⭐️ 共識累積'].iloc[-1]} 顆")
+        col3.metric("⭐️ 雙重共識命中", f"{res_df['⭐️ 共識累積'].iloc[-1]} 顆")
+        
+        # 第四個亮點：殺牌防守率！
+        col4.metric("🛡️ 十大殺牌防守率", f"{kill_defense_rate:.1f} %", "越高越好", delta_color="normal")
         
         st.line_chart(res_df[["🔴 短線累積", "🔵 長線累積", "⭐️ 共識累積"]])
         
-        with st.expander("📝 展開查看：每日命中覆盤明細對帳單"):
-            st.dataframe(res_df[["✅ 實際開獎", "🔴 短線推薦", "🔴 命中", "🔵 長線推薦", "🔵 命中", "⭐️ 共識推薦", "⭐️ 命中"]], use_container_width=True)
+        with st.expander("📝 展開查看：每日命中與殺牌防守覆盤明細"):
+            st.dataframe(res_df[["✅ 實際開獎", "🔴 短線推薦", "🔴 命中", "🔵 長線推薦", "🔵 命中", "⭐️ 共識推薦", "⭐️ 命中", "💀 十大殺牌", "🛡️ 成功閃避"]], use_container_width=True)
             
     else:
         st.warning(f"⚠️ 【{game_choice}】資料庫目前只有 {len(df)} 期，不足 100 期，無法進行完整回測。請先累積多一點資料喔！")
@@ -447,6 +438,5 @@ elif page == "📈 回測與勝率追蹤":
 elif page == "📖 核心理論白皮書":
     st.title("📖 核心理論與策略解析 (Whitepaper)")
     st.markdown("""
-    這套系統內建**動態參數微調面板**，允許操作者針對不同的市場週期，隨時改變演算法的嚴格程度，實現真正的量化操盤。
-    *(詳細理論文字保留，可自行擴充)*
+    這套系統內建**動態參數微調面板**，允許操作者針對不同的市場週期，隨時改變演算法的嚴格程度，並具備**反向做空（殺牌）追蹤**能力，實現真正的量化操盤。
     """)
