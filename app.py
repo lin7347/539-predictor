@@ -37,6 +37,28 @@ include_repeat = st.sidebar.checkbox(
 st.sidebar.markdown("---")
 
 # ==========================================
+# 🚀 新增：突破號 (冷轉熱) 參數微調
+# ==========================================
+st.sidebar.header("🚀 突破號 (冷轉熱) 參數微調")
+breakout_long_thresh = st.sidebar.number_input(
+    "📉 長線冷門標準 (100期內開出次數 ≤)", 
+    min_value=1, max_value=25, value=12, step=1,
+    help="設定100期內開出幾次以下才算長線冷號。"
+)
+breakout_short_period = st.sidebar.number_input(
+    "🔍 短線觀察期數 (近 N 期)", 
+    min_value=5, max_value=50, value=20, step=1,
+    help="設定短線爆發的觀察區間（例如近20期）。"
+)
+breakout_short_thresh = st.sidebar.number_input(
+    "📈 短線爆發標準 (開出次數 ≥)", 
+    min_value=1, max_value=15, value=3, step=1,
+    help="在上述短線觀察期內，至少要開出幾次才算爆發突破。"
+)
+
+st.sidebar.markdown("---")
+
+# ==========================================
 # 🔗 連接 Google Sheets 資料庫
 # ==========================================
 def get_google_sheet(sheet_name):
@@ -72,7 +94,7 @@ df = load_data(game_choice)
 # ==========================================
 # 🧠 空間演算法核心引擎
 # ==========================================
-def get_predictions(target_draw, gap_limit, allow_repeat, s_100_series, s_20_series):
+def get_predictions(target_draw, gap_limit, allow_repeat, s_100_series, s_short_series, long_thresh, short_thresh):
     target_draw = sorted(target_draw)
     extended_draw = [0] + target_draw + [40]
     
@@ -138,10 +160,10 @@ def get_predictions(target_draw, gap_limit, allow_repeat, s_100_series, s_20_ser
         worst_10_pool = dead_pool + cold_sorted + neutral_sorted
         worst_10_picks = sorted(worst_10_pool[:10])
 
-    if s_100_series is not None and s_20_series is not None:
+    if s_100_series is not None and s_short_series is not None:
         for p in range(1, 40):
-            # 條件：100期內偏冷 (<=12次)，近20期內爆發 (>=3次)
-            if s_100_series.get(p, 0) <= 12 and s_20_series.get(p, 0) >= 3:
+            # 🚀 動態條件：100期內偏冷 (<=長線標準)，近 N 期內爆發 (>=短線標準)
+            if s_100_series.get(p, 0) <= long_thresh and s_short_series.get(p, 0) >= short_thresh:
                 if p not in worst_10_picks: breakout_picks.append(p)
     
     return short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, tail_resonances, max_gap, worst_10_picks, breakout_picks
@@ -228,10 +250,13 @@ else:
 nums_100 = historical_df.tail(100)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
 s_100 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_100).value_counts(), fill_value=0).astype(int)
 
-nums_20 = historical_df.tail(20)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
-s_20 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_20).value_counts(), fill_value=0).astype(int)
+# 🚀 動態使用側邊欄設定的「短線觀察期數」
+nums_short = historical_df.tail(breakout_short_period)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
+s_short = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_short).value_counts(), fill_value=0).astype(int)
 
-short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, tail_resonances, max_gap, worst_10_picks, breakout_picks = get_predictions(target_draw, death_sea_gap, include_repeat, s_100, s_20)
+short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, tail_resonances, max_gap, worst_10_picks, breakout_picks = get_predictions(
+    target_draw, death_sea_gap, include_repeat, s_100, s_short, breakout_long_thresh, breakout_short_thresh
+)
 
 # ==========================================
 # 🖥️ 頁面 1：🎯 39碼全解析雷達
@@ -251,13 +276,13 @@ if page == "🎯 39碼全解析雷達":
         if breakout_picks:
             st.success(f"""
             ### 🚀 底部爆量起漲 (冷轉熱突破號)
-            符合「長線冷門、短線爆發」黃金交叉，強勢表態：
+            符合「百期冷門(≤{breakout_long_thresh}次)、近{breakout_short_period}期爆發(≥{breakout_short_thresh}次)」強勢表態：
             ## **{', '.join([str(n) for n in breakout_picks])}**
             """)
         else:
-            st.info("""
+            st.info(f"""
             ### 🚀 底部爆量起漲 (冷轉熱突破號)
-            *(今日無符合長線冷門且短線強勢突破的號碼)*
+            *(今日無符合「百期冷門(≤{breakout_long_thresh}次)、近{breakout_short_period}期爆發(≥{breakout_short_thresh}次)」的號碼)*
             """)
 
     st.markdown("---")
@@ -325,7 +350,7 @@ elif page == "⚔️ 雙引擎策略看板":
     st.info("此頁面結構不變，請透過左側選單切換至「回測與勝率追蹤」查看最新突破勝率功能。")
 
 # ==========================================
-# 🖥️ 頁面 3：📈 回測與勝率追蹤 (✨ 新增突破追蹤)
+# 🖥️ 頁面 3：📈 回測與勝率追蹤
 # ==========================================
 elif page == "📈 回測與勝率追蹤":
     st.title(f"📈 {game_choice} 策略勝率與全面回測追蹤 (近 100 期)")
@@ -343,16 +368,17 @@ elif page == "📈 回測與勝率追蹤":
             nums_100_bt = historical_for_backtest[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
             s_100_bt = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_100_bt).value_counts(), fill_value=0).astype(int)
             
-            nums_20_bt = historical_for_backtest.tail(20)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
-            s_20_bt = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_20_bt).value_counts(), fill_value=0).astype(int)
+            # 🚀 回測時也要動態套用側邊欄設定的短線期數
+            nums_short_bt = historical_for_backtest.tail(breakout_short_period)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
+            s_short_bt = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_short_bt).value_counts(), fill_value=0).astype(int)
             
-            # 取得回測當下的推薦陣列
-            sp, lp, cp, _, _, _, _, _, worst_10, breakout = get_predictions(past_draw, death_sea_gap, include_repeat, s_100_bt, s_20_bt)
+            sp, lp, cp, _, _, _, _, _, worst_10, breakout = get_predictions(
+                past_draw, death_sea_gap, include_repeat, s_100_bt, s_short_bt, breakout_long_thresh, breakout_short_thresh
+            )
             
             short_hits = len(set(sp).intersection(set(actual_next_draw)))
             long_hits = len(set(lp).intersection(set(actual_next_draw)))
             
-            # 🚀 計算突破牌的命中數與推薦數
             breakout_hits = len(set(breakout).intersection(set(actual_next_draw)))
             breakout_suggested = len(breakout)
             
@@ -367,8 +393,8 @@ elif page == "📈 回測與勝率追蹤":
                 "🔵 長線推薦": str(lp) if lp else "-",
                 "🔵 命中": long_hits,
                 "🚀 突破轉強": str(breakout) if breakout else "-",
-                "🚀 推薦數": breakout_suggested,  # 隱藏用作計算
-                "🚀 命中數": breakout_hits,       # 隱藏用作計算
+                "🚀 推薦數": breakout_suggested,  
+                "🚀 命中數": breakout_hits,       
                 "💀 十大殺牌": str(worst_10) if worst_10 else "-",
                 "🛡️ 成功閃避": successful_kills
             })
@@ -377,12 +403,10 @@ elif page == "📈 回測與勝率追蹤":
         res_df["🔴 短線累積"] = res_df["🔴 命中"].cumsum()
         res_df["🔵 長線累積"] = res_df["🔵 命中"].cumsum()
         
-        # 🛡️ 計算防守率
         total_kills_attempted = len(res_df) * 10
         total_successful_kills = res_df["🛡️ 成功閃避"].sum()
         kill_defense_rate = (total_successful_kills / total_kills_attempted) * 100
         
-        # 🚀 計算狙擊勝率 (有出刀的才算)
         total_breakout_suggested = res_df["🚀 推薦數"].sum()
         total_breakout_hits = res_df["🚀 命中數"].sum()
         if total_breakout_suggested > 0:
@@ -391,19 +415,15 @@ elif page == "📈 回測與勝率追蹤":
             breakout_win_rate = 0.0
         
         st.markdown("---")
-        # 顯示四大戰略指標
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("🔴 短線累積命中", f"{res_df['🔴 短線累積'].iloc[-1]} 顆")
         col2.metric("🔵 長線累積命中", f"{res_df['🔵 長線累積'].iloc[-1]} 顆")
-        
-        # ✨ 新增：突破勝率專屬面板
         col3.metric(
             "🚀 突破號狙擊勝率", 
             f"{breakout_win_rate:.1f} %", 
-            f"100期內共抓出 {total_breakout_suggested} 顆，命中 {total_breakout_hits} 顆",
+            f"共抓出 {total_breakout_suggested} 顆，命中 {total_breakout_hits} 顆",
             delta_color="normal"
         )
-        
         col4.metric("🛡️ 十大殺牌防守率", f"{kill_defense_rate:.1f} %", "越高越好", delta_color="normal")
         
         st.line_chart(res_df[["🔴 短線累積", "🔵 長線累積"]])
