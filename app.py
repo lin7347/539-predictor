@@ -330,4 +330,24 @@ if page == "🎯 39碼全解析雷達":
         <tr>
             <td style="padding: 12px; border: 1px solid #ddd;">⭐ **高機率開出**<br>*(強勢輔助)*</td>
             <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #f0ad4e; font-size: 18px;">{get_category_picks(long_picks, 'WARM')}</b></td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="
+            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #f0ad4e; font-size: 18px;">{get_category_picks(short_picks, 'WARM')}</b></td>
+        </tr>
+        <tr>
+            <td style="padding: 12px; border: 1px solid #ddd;">{row3_icon}</td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #5bc0de; font-size: 18px;">{get_category_picks(long_picks, 'REPEAT_OR_DEAD')}</b></td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #5bc0de; font-size: 18px;">{get_category_picks(short_picks, 'REPEAT_OR_DEAD')}</b></td>
+        </tr>
+        <tr>
+            <td style="padding: 12px; border: 1px solid #ddd;">⚖️ **中等機率**</td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b>{get_category_picks(long_picks, 'NEUTRAL')}</b></td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b>{get_category_picks(short_picks, 'NEUTRAL')}</b></td>
+        </tr>
+        <tr>
+            <td style="padding: 12px; border: 1px solid #ddd;">❄️ **低機率**</td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #999;">{get_category_picks(long_picks, 'COLD')}</b></td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #999;">{get_category_picks(short_picks, 'COLD')}</b></td>
+        </tr>
+    </table>
+    """
+    
+    st.markdown(html_table, unsafe_allow_html=True)
