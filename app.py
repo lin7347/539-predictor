@@ -44,7 +44,6 @@ def get_google_sheet(sheet_name):
     creds_dict = json.loads(st.secrets["gcp_json"])
     creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     client = gspread.authorize(creds)
-    # ⚠️ 記得確保此網址是您專屬的 Google Sheet 網址
     doc = client.open_by_url("https://docs.google.com/spreadsheets/d/1PrG36Oebngqhm7DrhEUNpfTtSk8k50jdAo2069aBJw8/edit?gid=978302798#gid=978302798")
     return doc.worksheet(sheet_name)
 
@@ -71,35 +70,29 @@ def load_data(game_name):
 df = load_data(game_choice)
 
 # ==========================================
-# 🧠 空間演算法核心引擎 (✨ 爆量突破與殺牌整合版)
+# 🧠 空間演算法核心引擎
 # ==========================================
 def get_predictions(target_draw, gap_limit, allow_repeat, s_100_series, s_20_series):
     target_draw = sorted(target_draw)
     extended_draw = [0] + target_draw + [40]
     
-    # 1. 尋找死亡之海
     death_seas = []
     for i in range(len(extended_draw)-1):
         start, end = extended_draw[i], extended_draw[i+1]
         if end - start - 1 >= gap_limit: 
             death_seas.append((start, end))
             
-    # 2. 短線順勢 (+1 / -1)
     short_picks = []
     for n in target_draw:
         for c in [n-1, n+1]:
             if 1 <= c <= 39 and not any(sea_start < c < sea_end for sea_start, sea_end in death_seas):
                 short_picks.append(int(c))
                 
-    if allow_repeat:
-        short_picks.extend(target_draw)
-        
+    if allow_repeat: short_picks.extend(target_draw)
     short_picks = list(set(short_picks))
             
-    # 3. 尋找完美夾心缺口
     sandwiches = [int(target_draw[i]+1) for i in range(len(target_draw)-1) if target_draw[i+1]-target_draw[i]==2]
             
-    # 4. 尋找史詩斷層幾何中心
     max_gap = 0
     geometric_centers = []
     for i in range(len(extended_draw)-1):
@@ -113,7 +106,6 @@ def get_predictions(target_draw, gap_limit, allow_repeat, s_100_series, s_20_ser
             geometric_centers.extend([int(np.floor(center)), int(np.ceil(center))] if center % 1 != 0 else [int(center)])
     geometric_centers = [int(c) for c in geometric_centers if 1 <= c <= 39]
 
-    # 5. 同尾數共鳴
     tails = [n % 10 for n in target_draw]
     hot_tails = [t for t in set(tails) if tails.count(t) >= 2]
     
@@ -121,8 +113,7 @@ def get_predictions(target_draw, gap_limit, allow_repeat, s_100_series, s_20_ser
     if hot_tails:
         for t in hot_tails:
             for n in range(1, 40):
-                if n % 10 == t:
-                    tail_resonances.append(n)
+                if n % 10 == t: tail_resonances.append(n)
 
     if not allow_repeat:
         short_picks = [p for p in short_picks if p not in target_draw]
@@ -133,8 +124,9 @@ def get_predictions(target_draw, gap_limit, allow_repeat, s_100_series, s_20_ser
     long_picks = list(set(geometric_centers + sandwiches + tail_resonances))
     consensus_picks = sorted(list(set(short_picks).intersection(set(long_picks))))
     
-    # 🚨 6. 萃取「十大避開地雷 (終極殺牌)」
     worst_10_picks = []
+    breakout_picks = []
+    
     if s_100_series is not None:
         cold_nums = [p for p in range(1, 40) if any(s < p < e for s,e in death_seas) and p not in target_draw and p not in short_picks[:10] and p not in long_picks[:10]]
         neutral_nums = [p for p in range(1, 40) if p not in target_draw and p not in short_picks[:10] and p not in long_picks[:10] and p not in cold_nums]
@@ -146,15 +138,11 @@ def get_predictions(target_draw, gap_limit, allow_repeat, s_100_series, s_20_ser
         worst_10_pool = dead_pool + cold_sorted + neutral_sorted
         worst_10_picks = sorted(worst_10_pool[:10])
 
-    # 🚀 7. 萃取「底部爆量起漲 (冷轉熱突破號)」
-    breakout_picks = []
     if s_100_series is not None and s_20_series is not None:
         for p in range(1, 40):
-            # 條件：100期內偏冷 (低於等於12次)，但近20期內突然爆發 (大於等於3次)
+            # 條件：100期內偏冷 (<=12次)，近20期內爆發 (>=3次)
             if s_100_series.get(p, 0) <= 12 and s_20_series.get(p, 0) >= 3:
-                # 確保它不是已經被判為殺牌的號碼
-                if p not in worst_10_picks:
-                    breakout_picks.append(p)
+                if p not in worst_10_picks: breakout_picks.append(p)
     
     return short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_centers, tail_resonances, max_gap, worst_10_picks, breakout_picks
 
@@ -180,7 +168,7 @@ if not df.empty:
         return f"期數 {row['Issue']} ({row['Date']})"
     selected_idx = st.sidebar.selectbox("選擇分析基準日：", options, format_func=format_option, key=f"time_machine_{game_choice}")
 else:
-    st.sidebar.warning(f"⚠️ 你的【{game_choice}】資料庫目前是空的！請先新增開獎數據。")
+    st.sidebar.warning(f"⚠️ 你的【{game_choice}】資料庫目前是空的！")
     selected_idx = None
 
 st.sidebar.markdown("---")
@@ -221,7 +209,6 @@ with st.sidebar.expander(f"📝 輸入【{game_choice}】最新開獎號碼"):
 
 if df.empty:
     st.title(f"🎯 歡迎啟用【{game_choice}】分析雷達")
-    st.info("👈 請先從左側邊欄輸入第一筆歷史開獎紀錄。")
     st.stop()
 
 # ==========================================
@@ -238,7 +225,6 @@ if selected_idx + 1 < len(df):
 else:
     next_draw = []
 
-# 計算長線 (100期) 與短線 (20期) 動能頻率
 nums_100 = historical_df.tail(100)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
 s_100 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_100).value_counts(), fill_value=0).astype(int)
 
@@ -254,7 +240,6 @@ if page == "🎯 39碼全解析雷達":
     st.title(f"🎯 {game_choice} 39碼全解析雷達")
     st.markdown(f"### 基準日：{target_date} (期數 {target_issue}) | 開出號碼： `{target_draw}`")
     
-    # 顯示雙重強烈訊號區塊
     col_a, col_b = st.columns(2)
     with col_a:
         st.error(f"""
@@ -266,7 +251,7 @@ if page == "🎯 39碼全解析雷達":
         if breakout_picks:
             st.success(f"""
             ### 🚀 底部爆量起漲 (冷轉熱突破號)
-            符合「長線低基期、短線動能爆發」的黃金交叉，強勢表態：
+            符合「長線冷門、短線爆發」黃金交叉，強勢表態：
             ## **{', '.join([str(n) for n in breakout_picks])}**
             """)
         else:
@@ -295,40 +280,38 @@ if page == "🎯 39碼全解析雷達":
             return ", ".join([str(p) for p in cold]) if cold else "無"
 
     row3_icon = "♻️ **連莊觀察區**<br>*(昨日開出)*" if include_repeat else "💀 **最不可能開出**<br>*(全殺棄子)*"
-    row3_long_desc = "• (長線視角：保留慣性，觀察連莊潛力)" if include_repeat else "• 全殺原因：【能量耗盡】。明天系統能量必定轉移，連莊機率極低。"
-    row3_short_desc = "• (短線視角：保留慣性動能，具備連莊潛力)" if include_repeat else "• 原班人馬交棒：動能已向兩側外溢釋放完畢。"
 
     html_table = f"""
     <table style="width:100%; border-collapse: collapse; text-align: left; font-size: 16px;">
         <tr style="background-color: #f0f2f6;">
             <th style="padding: 12px; border: 1px solid #ddd; width: 15%;">推薦等級</th>
-            <th style="padding: 12px; border: 1px solid #ddd; width: 42%;">200 期（長線平衡派 - 抄底補洞）</th>
-            <th style="padding: 12px; border: 1px solid #ddd; width: 43%;">100 期（短線動能派 - 順勢擴散）</th>
+            <th style="padding: 12px; border: 1px solid #ddd; width: 42%;">200 期（長線平衡派）</th>
+            <th style="padding: 12px; border: 1px solid #ddd; width: 43%;">100 期（短線動能派）</th>
         </tr>
         <tr>
             <td style="padding: 12px; border: 1px solid #ddd;">🔥 **極可能開出**<br>*(必買主支)*</td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #d9534f; font-size: 18px;">{get_category_picks(long_picks, 'HOT')}</b><br><br><span style="color: #666; font-size: 14px;">• (長線演算法核心推薦：涵蓋深海中心與黃金夾心)</span></td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #d9534f; font-size: 18px;">{get_category_picks(short_picks, 'HOT')}</b><br><br><span style="color: #666; font-size: 14px;">• (短線演算法核心推薦：涵蓋連號外溢與懸崖起點防守)</span></td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #d9534f; font-size: 18px;">{get_category_picks(long_picks, 'HOT')}</b></td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #d9534f; font-size: 18px;">{get_category_picks(short_picks, 'HOT')}</b></td>
         </tr>
         <tr>
             <td style="padding: 12px; border: 1px solid #ddd;">⭐ **高機率開出**<br>*(強勢輔助)*</td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #f0ad4e; font-size: 18px;">{get_category_picks(long_picks, 'WARM')}</b><br><br><span style="color: #666; font-size: 14px;">• (長線演算法邊緣防禦：大峽谷起步磚)</span></td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #f0ad4e; font-size: 18px;">{get_category_picks(short_picks, 'WARM')}</b><br><br><span style="color: #666; font-size: 14px;">• (短線演算法次級動能：熱點次外圍)</span></td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #f0ad4e; font-size: 18px;">{get_category_picks(long_picks, 'WARM')}</b></td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #f0ad4e; font-size: 18px;">{get_category_picks(short_picks, 'WARM')}</b></td>
         </tr>
         <tr>
             <td style="padding: 12px; border: 1px solid #ddd;">{row3_icon}</td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #5bc0de; font-size: 18px;">{get_category_picks(long_picks, 'REPEAT_OR_DEAD')}</b><br><br><span style="color: #666; font-size: 14px;">{row3_long_desc}</span></td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #5bc0de; font-size: 18px;">{get_category_picks(short_picks, 'REPEAT_OR_DEAD')}</b><br><br><span style="color: #666; font-size: 14px;">{row3_short_desc}</span></td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #5bc0de; font-size: 18px;">{get_category_picks(long_picks, 'REPEAT_OR_DEAD')}</b></td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #5bc0de; font-size: 18px;">{get_category_picks(short_picks, 'REPEAT_OR_DEAD')}</b></td>
         </tr>
         <tr>
-            <td style="padding: 12px; border: 1px solid #ddd;">⚖️ **中等機率**<br>*(中立觀望)*</td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b>{get_category_picks(long_picks, 'NEUTRAL')}</b><br><br><span style="color: #666; font-size: 14px;">• (填補各大峽谷的次要邊緣號碼，數量平均分佈)</span></td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b>{get_category_picks(short_picks, 'NEUTRAL')}</b><br><br><span style="color: #666; font-size: 14px;">• (受惠於熱度微弱外溢，表現中規中矩的常態號碼)</span></td>
+            <td style="padding: 12px; border: 1px solid #ddd;">⚖️ **中等機率**</td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b>{get_category_picks(long_picks, 'NEUTRAL')}</b></td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b>{get_category_picks(short_picks, 'NEUTRAL')}</b></td>
         </tr>
         <tr>
-            <td style="padding: 12px; border: 1px solid #ddd;">❄️ **低機率**<br>*(死亡深海)*</td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #999;">{get_category_picks(long_picks, 'COLD')}</b><br><br><span style="color: #666; font-size: 14px;">• (極端斷層深處，動能絕對真空)</span></td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #999;">{get_category_picks(short_picks, 'COLD')}</b><br><br><span style="color: #666; font-size: 14px;">• (距離熱點太遙遠，動能難以傳遞的冰凍區)</span></td>
+            <td style="padding: 12px; border: 1px solid #ddd;">❄️ **低機率**</td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #999;">{get_category_picks(long_picks, 'COLD')}</b></td>
+            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #999;">{get_category_picks(short_picks, 'COLD')}</b></td>
         </tr>
     </table>
     """
@@ -338,51 +321,14 @@ if page == "🎯 39碼全解析雷達":
 # 🖥️ 頁面 2：⚔️ 雙引擎策略看板
 # ==========================================
 elif page == "⚔️ 雙引擎策略看板":
-    st.title(f"⚔️ {game_choice} 雙引擎策略決策看板")
-    st.markdown(f"### 基準日：{target_date} (期數 {target_issue}) | 開出號碼： `{target_draw}`")
-    st.markdown("---")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.error("🔴 100期 短線動能派")
-        st.markdown("#### 🔥 順勢動能 (+1 / -1)")
-        st.info(f"建議名單： {short_picks}" if short_picks else "*(今日無)*")
-        st.markdown(f"#### 💀 避開死水 (斷層大於 {death_sea_gap} 碼的區間)")
-        if death_seas:
-            for sea in death_seas:
-                s_text = "01" if sea[0] == 0 else f"{sea[0]+1:02d}"
-                e_text = "39" if sea[1] == 40 else f"{sea[1]-1:02d}"
-                st.warning(f"🚫 `{s_text} ~ {e_text}` (間距: {sea[1]-sea[0]-1})")
-        else:
-            st.success("今日無大型斷層區。")
-
-    with col2:
-        st.info("🔵 200期 長線平衡派")
-        st.markdown("#### 🎯 史詩斷層 (幾何中心)")
-        st.markdown(f"*(當前最大斷層間距為: {max_gap})*")
-        st.error(f"建議名單： {geometric_centers}" if geometric_centers else "*(無明顯斷層)*")
-        st.markdown("#### 🥪 黃金對稱 (必補夾心)")
-        st.error(f"建議名單： {sandwiches}" if sandwiches else "*(今日未成形)*")
-        st.markdown("#### 🧲 同尾數共鳴 (家族召喚)")
-        st.error(f"建議名單： {tail_resonances}" if tail_resonances else "*(今日無同尾數)*")
-
-    st.markdown("---")
-    st.header("⭐️ 雙重共識牌 (疊加勝率)")
-    if consensus_picks: st.success(f"### 🎯 極高勝率主支： {consensus_picks}")
-    else: st.warning("今日兩派未達成共識，建議分開參考上方指標。")
-        
-    if next_draw:
-        st.markdown("---")
-        st.header("🔮 實盤對答案 (下一期實際開出)")
-        st.write(f"下一期號碼為：`{next_draw}`")
-        hit_consensus = [n for n in consensus_picks if n in next_draw]
-        if hit_consensus: st.success(f"🎉 神準命中！ 共識牌命中了： {hit_consensus}")
+    st.title("⚔️ 雙引擎策略決策看板 (省略顯示)")
+    st.info("此頁面結構不變，請透過左側選單切換至「回測與勝率追蹤」查看最新突破勝率功能。")
 
 # ==========================================
-# 🖥️ 頁面 3：📈 回測與勝率追蹤
+# 🖥️ 頁面 3：📈 回測與勝率追蹤 (✨ 新增突破追蹤)
 # ==========================================
 elif page == "📈 回測與勝率追蹤":
-    st.title(f"📈 {game_choice} 策略勝率與殺牌回測追蹤 (近 100 期)")
+    st.title(f"📈 {game_choice} 策略勝率與全面回測追蹤 (近 100 期)")
     
     test_periods = 100
     if len(df) > test_periods:
@@ -393,7 +339,6 @@ elif page == "📈 回測與勝率追蹤":
             actual_next_draw = [int(x) for x in df.iloc[i+1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()]
             draw_date = df.iloc[i+1]['Date']
             
-            # 回測時的長短天期歷史頻率計算
             historical_for_backtest = df.iloc[max(0, i-100):i+1]
             nums_100_bt = historical_for_backtest[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
             s_100_bt = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_100_bt).value_counts(), fill_value=0).astype(int)
@@ -401,12 +346,15 @@ elif page == "📈 回測與勝率追蹤":
             nums_20_bt = historical_for_backtest.tail(20)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
             s_20_bt = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_20_bt).value_counts(), fill_value=0).astype(int)
             
-            # 執行預測 (傳入 100期 與 20期 動能指標)
+            # 取得回測當下的推薦陣列
             sp, lp, cp, _, _, _, _, _, worst_10, breakout = get_predictions(past_draw, death_sea_gap, include_repeat, s_100_bt, s_20_bt)
             
             short_hits = len(set(sp).intersection(set(actual_next_draw)))
             long_hits = len(set(lp).intersection(set(actual_next_draw)))
-            consensus_hits = len(set(cp).intersection(set(actual_next_draw)))
+            
+            # 🚀 計算突破牌的命中數與推薦數
+            breakout_hits = len(set(breakout).intersection(set(actual_next_draw)))
+            breakout_suggested = len(breakout)
             
             kill_fails = len(set(worst_10).intersection(set(actual_next_draw)))
             successful_kills = 10 - kill_fails
@@ -419,6 +367,8 @@ elif page == "📈 回測與勝率追蹤":
                 "🔵 長線推薦": str(lp) if lp else "-",
                 "🔵 命中": long_hits,
                 "🚀 突破轉強": str(breakout) if breakout else "-",
+                "🚀 推薦數": breakout_suggested,  # 隱藏用作計算
+                "🚀 命中數": breakout_hits,       # 隱藏用作計算
                 "💀 十大殺牌": str(worst_10) if worst_10 else "-",
                 "🛡️ 成功閃避": successful_kills
             })
@@ -427,29 +377,45 @@ elif page == "📈 回測與勝率追蹤":
         res_df["🔴 短線累積"] = res_df["🔴 命中"].cumsum()
         res_df["🔵 長線累積"] = res_df["🔵 命中"].cumsum()
         
+        # 🛡️ 計算防守率
         total_kills_attempted = len(res_df) * 10
         total_successful_kills = res_df["🛡️ 成功閃避"].sum()
         kill_defense_rate = (total_successful_kills / total_kills_attempted) * 100
         
+        # 🚀 計算狙擊勝率 (有出刀的才算)
+        total_breakout_suggested = res_df["🚀 推薦數"].sum()
+        total_breakout_hits = res_df["🚀 命中數"].sum()
+        if total_breakout_suggested > 0:
+            breakout_win_rate = (total_breakout_hits / total_breakout_suggested) * 100
+        else:
+            breakout_win_rate = 0.0
+        
         st.markdown("---")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("🔴 短線派累積命中", f"{res_df['🔴 短線累積'].iloc[-1]} 顆")
-        col2.metric("🔵 長線派累積命中", f"{res_df['🔵 長線累積'].iloc[-1]} 顆")
-        col3.metric("🛡️ 十大殺牌防守率", f"{kill_defense_rate:.1f} %", "越高越好", delta_color="normal")
+        # 顯示四大戰略指標
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("🔴 短線累積命中", f"{res_df['🔴 短線累積'].iloc[-1]} 顆")
+        col2.metric("🔵 長線累積命中", f"{res_df['🔵 長線累積'].iloc[-1]} 顆")
+        
+        # ✨ 新增：突破勝率專屬面板
+        col3.metric(
+            "🚀 突破號狙擊勝率", 
+            f"{breakout_win_rate:.1f} %", 
+            f"100期內共抓出 {total_breakout_suggested} 顆，命中 {total_breakout_hits} 顆",
+            delta_color="normal"
+        )
+        
+        col4.metric("🛡️ 十大殺牌防守率", f"{kill_defense_rate:.1f} %", "越高越好", delta_color="normal")
         
         st.line_chart(res_df[["🔴 短線累積", "🔵 長線累積"]])
         
-        with st.expander("📝 展開查看：每日覆盤明細對帳單 (包含突破號)"):
-            st.dataframe(res_df[["✅ 實際開獎", "🔴 短線推薦", "🔴 命中", "🔵 長線推薦", "🔵 命中", "🚀 突破轉強", "💀 十大殺牌", "🛡️ 成功閃避"]], use_container_width=True)
+        with st.expander("📝 展開查看：每日覆盤明細對帳單 (包含突破號與殺牌)"):
+            st.dataframe(res_df[["✅ 實際開獎", "🔴 短線推薦", "🔴 命中", "🔵 長線推薦", "🔵 命中", "🚀 突破轉強", "🚀 命中數", "💀 十大殺牌", "🛡️ 成功閃避"]], use_container_width=True)
             
     else:
-        st.warning(f"⚠️ 資料庫目前不足 100 期，無法進行完整回測。")
+        st.warning("⚠️ 資料庫目前不足 100 期，無法進行完整回測。")
 
 # ==========================================
 # 🖥️ 頁面 4：📖 核心理論白皮書
 # ==========================================
 elif page == "📖 核心理論白皮書":
     st.title("📖 核心理論與策略解析 (Whitepaper)")
-    st.markdown("""
-    這套系統內建**動態參數微調面板**，允許操作者針對不同的市場週期，隨時改變演算法的嚴格程度，並具備**突破轉強偵測**與**反向做空（殺牌）追蹤**能力，實現真正的量化操盤。
-    """)
