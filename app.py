@@ -254,7 +254,7 @@ short_picks, long_picks, consensus_picks, death_seas, sandwiches, geometric_cent
 )
 
 # ==========================================
-# 🖥️ 頁面 1-3 省略 (內容不變，維持運作)
+# 🖥️ 頁面 1：🎯 39碼全解析雷達
 # ==========================================
 if page == "🎯 39碼全解析雷達":
     st.title(f"🎯 {game_choice} 39碼全解析雷達")
@@ -337,6 +337,9 @@ if page == "🎯 39碼全解析雷達":
     """
     st.markdown(html_table, unsafe_allow_html=True)
 
+# ==========================================
+# 🖥️ 頁面 2：⚔️ 雙引擎策略看板
+# ==========================================
 elif page == "⚔️ 雙引擎策略看板":
     st.title(f"⚔️ {game_choice} 雙引擎策略決策看板")
     st.markdown(f"### 基準日：{target_date} (期數 {target_issue}) | 開出號碼： `{target_draw}`")
@@ -371,6 +374,9 @@ elif page == "⚔️ 雙引擎策略看板":
     if consensus_picks: st.success(f"### 🎯 極高勝率主支： {consensus_picks}")
     else: st.warning("今日兩派未達成共識，建議分開參考上方指標。")
 
+# ==========================================
+# 🖥️ 頁面 3：📈 回測與勝率追蹤
+# ==========================================
 elif page == "📈 回測與勝率追蹤":
     st.title(f"📈 {game_choice} 策略勝率與全面回測追蹤")
     
@@ -564,21 +570,55 @@ elif page == "📊 頻率機率回測實驗室":
                     ## `{hit_nums}`
                     """)
             
-            # ✨ 大升級：互動式長短線頻率對比表格
-            with st.expander("🔍 詳細比對：39碼目前【長短線】頻率狀態 (可點擊欄位排序)"):
+            # ✨ 大升級：互動式長短線頻率對比表格 (美化版 HTML)
+            with st.expander("🔍 詳細查看：39碼目前【長短線】頻率狀態 (圖表化)"):
                 latest_window_2 = historical_df.tail(test_window_2)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
                 latest_freq_2 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(latest_window_2).value_counts(), fill_value=0).astype(int)
                 
-                comp_data = []
+                freq_dict = {}
                 for n in range(1, 40):
-                    comp_data.append({
-                        "號碼": f"{n:02d}",
-                        f"主期數 ({test_window}期) 頻率": latest_freq[n],
-                        f"副期數 ({test_window_2}期) 頻率": latest_freq_2[n]
-                    })
+                    f = latest_freq[n]
+                    if f not in freq_dict: freq_dict[f] = []
+                    freq_dict[f].append(n)
                 
-                comp_df = pd.DataFrame(comp_data).set_index("號碼")
-                st.dataframe(comp_df, use_container_width=True)
+                avg_f = test_window * 5 / 39
+                
+                html_freq_table = f"""
+                <table style="width:100%; border-collapse: collapse; text-align: left; font-size: 16px;">
+                    <tr style="background-color: #f0f2f6;">
+                        <th style="padding: 12px; border: 1px solid #ddd; width: 25%;">主期數頻率 ({test_window}期)</th>
+                        <th style="padding: 12px; border: 1px solid #ddd; width: 75%;">對應號碼 & 副期數狀態 ({test_window_2}期)</th>
+                    </tr>
+                """
+                
+                for f in sorted(freq_dict.keys(), reverse=True):
+                    # 動態指派圖示與顏色
+                    if f >= avg_f * 1.5:
+                        icon, color = "🔥", "#d9534f"
+                    elif f >= avg_f:
+                        icon, color = "⭐", "#f0ad4e"
+                    elif f > 1:
+                        icon, color = "⚖️", "#333333"
+                    elif f == 1:
+                        icon, color = "❄️", "#5bc0de"
+                    else:
+                        icon, color = "💀", "#999999"
+                        
+                    nums_html = []
+                    for n in sorted(freq_dict[f]):
+                        long_f = latest_freq_2[n]
+                        nums_html.append(f"<span style='display:inline-block; margin-right:15px;'><b style='font-size:18px;'>{n:02d}</b> <span style='color:#888; font-size:13px;'>(長: {long_f}次)</span></span>")
+                    
+                    nums_str = "".join(nums_html)
+                    
+                    html_freq_table += f"""
+                    <tr>
+                        <td style="padding: 12px; border: 1px solid #ddd; color: {color};"><b>{icon} 出現 {f} 次</b></td>
+                        <td style="padding: 12px; border: 1px solid #ddd;">{nums_str}</td>
+                    </tr>
+                    """
+                html_freq_table += "</table>"
+                st.markdown(html_freq_table, unsafe_allow_html=True)
 
     else:
         st.warning(f"⚠️ 資料庫數據不足！需要至少 {test_window + test_periods} 期資料才能進行此回測。")
