@@ -454,7 +454,7 @@ elif page == "📈 回測與勝率追蹤":
         st.warning("⚠️ 資料庫目前不足 100 期，無法進行完整回測。")
 
 # ==========================================
-# 🖥️ 頁面 4：📊 頻率機率回測實驗室 (✨ 殺牌/不出機率大升級)
+# 🖥️ 頁面 4：📊 頻率機率回測實驗室
 # ==========================================
 elif page == "📊 頻率機率回測實驗室":
     st.title(f"📊 {game_choice} 頻率機率回測實驗室")
@@ -570,8 +570,8 @@ elif page == "📊 頻率機率回測實驗室":
                     ## `{hit_nums}`
                     """)
             
-            # ✨ 大升級：互動式長短線頻率對比表格 (美化版 HTML)
-            with st.expander("🔍 詳細查看：39碼目前【長短線】頻率狀態 (圖表化)"):
+            # ✨ 終極升級：您想要的華麗版「長短線頻率狀態對比表」在這裡！
+            with st.expander("🔍 詳細查看：39碼目前各頻率狀態 (雙期數動能對比)"):
                 latest_window_2 = historical_df.tail(test_window_2)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
                 latest_freq_2 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(latest_window_2).value_counts(), fill_value=0).astype(int)
                 
@@ -586,27 +586,23 @@ elif page == "📊 頻率機率回測實驗室":
                 html_freq_table = f"""
                 <table style="width:100%; border-collapse: collapse; text-align: left; font-size: 16px;">
                     <tr style="background-color: #f0f2f6;">
-                        <th style="padding: 12px; border: 1px solid #ddd; width: 25%;">主期數頻率 ({test_window}期)</th>
-                        <th style="padding: 12px; border: 1px solid #ddd; width: 75%;">對應號碼 & 副期數狀態 ({test_window_2}期)</th>
+                        <th style="padding: 12px; border: 1px solid #ddd; width: 20%;">短線熱度 ({test_window}期)</th>
+                        <th style="padding: 12px; border: 1px solid #ddd; width: 80%;">號碼分佈 <span style='font-size:13px; font-weight:normal; color:#666;'>&nbsp;*(灰色括號內為 {test_window_2} 期之長線基期次數)*</span></th>
                     </tr>
                 """
                 
                 for f in sorted(freq_dict.keys(), reverse=True):
-                    # 動態指派圖示與顏色
-                    if f >= avg_f * 1.5:
-                        icon, color = "🔥", "#d9534f"
-                    elif f >= avg_f:
-                        icon, color = "⭐", "#f0ad4e"
-                    elif f > 1:
-                        icon, color = "⚖️", "#333333"
-                    elif f == 1:
-                        icon, color = "❄️", "#5bc0de"
-                    else:
-                        icon, color = "💀", "#999999"
+                    # 動態指派圖示與顏色 (越熱越紅，越冷越灰)
+                    if f >= avg_f * 1.5: icon, color = "🔥", "#d9534f"
+                    elif f >= avg_f: icon, color = "⭐", "#f0ad4e"
+                    elif f > 1: icon, color = "⚖️", "#333333"
+                    elif f == 1: icon, color = "❄️", "#5bc0de"
+                    else: icon, color = "💀", "#999999"
                         
                     nums_html = []
                     for n in sorted(freq_dict[f]):
                         long_f = latest_freq_2[n]
+                        # 完美重現您的排版要求：主號碼放大粗體，長線次數灰色小字
                         nums_html.append(f"<span style='display:inline-block; margin-right:15px;'><b style='font-size:18px;'>{n:02d}</b> <span style='color:#888; font-size:13px;'>(長: {long_f}次)</span></span>")
                     
                     nums_str = "".join(nums_html)
@@ -618,6 +614,7 @@ elif page == "📊 頻率機率回測實驗室":
                     </tr>
                     """
                 html_freq_table += "</table>"
+                
                 st.markdown(html_freq_table, unsafe_allow_html=True)
 
     else:
