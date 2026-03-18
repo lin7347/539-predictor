@@ -277,7 +277,7 @@ if page == "🎯 39碼全解析雷達":
         else:
             st.info(f"""
             ### 🚀 底部爆量起漲 (冷轉熱突破號)
-            *(今日無符合「近{breakout_long_period}期冷門(≤{breakout_long_thresh}次)、近{breakout_short_period}期爆發(≥{breakout_short_thresh}次)」的號碼)*
+            *(今日無符合條件的起漲號碼)*
             """)
 
     st.markdown("---")
@@ -301,40 +301,41 @@ if page == "🎯 39碼全解析雷達":
 
     row3_icon = "♻️ **連莊觀察區**<br>*(昨日開出)*" if include_repeat else "💀 **最不可能開出**<br>*(全殺棄子)*"
 
+    # 注意這裡：HTML 標籤必須全部靠左，不能有空白縮排！
     html_table = f"""
-    <table style="width:100%; border-collapse: collapse; text-align: left; font-size: 16px;">
-        <tr style="background-color: #f0f2f6;">
-            <th style="padding: 12px; border: 1px solid #ddd; width: 15%;">推薦等級</th>
-            <th style="padding: 12px; border: 1px solid #ddd; width: 42%;">長線平衡派 (抄底與修補)</th>
-            <th style="padding: 12px; border: 1px solid #ddd; width: 43%;">短線動能派 (順勢與擴散)</th>
-        </tr>
-        <tr>
-            <td style="padding: 12px; border: 1px solid #ddd;">🔥 **極可能開出**<br>*(必買主支)*</td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #d9534f; font-size: 18px;">{get_category_picks(long_picks, 'HOT')}</b></td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #d9534f; font-size: 18px;">{get_category_picks(short_picks, 'HOT')}</b></td>
-        </tr>
-        <tr>
-            <td style="padding: 12px; border: 1px solid #ddd;">⭐ **高機率開出**<br>*(強勢輔助)*</td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #f0ad4e; font-size: 18px;">{get_category_picks(long_picks, 'WARM')}</b></td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #f0ad4e; font-size: 18px;">{get_category_picks(short_picks, 'WARM')}</b></td>
-        </tr>
-        <tr>
-            <td style="padding: 12px; border: 1px solid #ddd;">{row3_icon}</td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #5bc0de; font-size: 18px;">{get_category_picks(long_picks, 'REPEAT_OR_DEAD')}</b></td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #5bc0de; font-size: 18px;">{get_category_picks(short_picks, 'REPEAT_OR_DEAD')}</b></td>
-        </tr>
-        <tr>
-            <td style="padding: 12px; border: 1px solid #ddd;">⚖️ **中等機率**</td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b>{get_category_picks(long_picks, 'NEUTRAL')}</b></td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b>{get_category_picks(short_picks, 'NEUTRAL')}</b></td>
-        </tr>
-        <tr>
-            <td style="padding: 12px; border: 1px solid #ddd;">❄️ **低機率**</td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #999;">{get_category_picks(long_picks, 'COLD')}</b></td>
-            <td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #999;">{get_category_picks(short_picks, 'COLD')}</b></td>
-        </tr>
-    </table>
-    """
+<table style="width:100%; border-collapse: collapse; text-align: left; font-size: 16px;">
+<tr style="background-color: #f0f2f6;">
+<th style="padding: 12px; border: 1px solid #ddd; width: 15%;">推薦等級</th>
+<th style="padding: 12px; border: 1px solid #ddd; width: 42%;">長線平衡派 (抄底與修補)</th>
+<th style="padding: 12px; border: 1px solid #ddd; width: 43%;">短線動能派 (順勢與擴散)</th>
+</tr>
+<tr>
+<td style="padding: 12px; border: 1px solid #ddd;">🔥 **極可能開出**<br>*(必買主支)*</td>
+<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #d9534f; font-size: 18px;">{get_category_picks(long_picks, 'HOT')}</b></td>
+<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #d9534f; font-size: 18px;">{get_category_picks(short_picks, 'HOT')}</b></td>
+</tr>
+<tr>
+<td style="padding: 12px; border: 1px solid #ddd;">⭐ **高機率開出**<br>*(強勢輔助)*</td>
+<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #f0ad4e; font-size: 18px;">{get_category_picks(long_picks, 'WARM')}</b></td>
+<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #f0ad4e; font-size: 18px;">{get_category_picks(short_picks, 'WARM')}</b></td>
+</tr>
+<tr>
+<td style="padding: 12px; border: 1px solid #ddd;">{row3_icon}</td>
+<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #5bc0de; font-size: 18px;">{get_category_picks(long_picks, 'REPEAT_OR_DEAD')}</b></td>
+<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #5bc0de; font-size: 18px;">{get_category_picks(short_picks, 'REPEAT_OR_DEAD')}</b></td>
+</tr>
+<tr>
+<td style="padding: 12px; border: 1px solid #ddd;">⚖️ **中等機率**</td>
+<td style="padding: 12px; border: 1px solid #ddd;"><b>{get_category_picks(long_picks, 'NEUTRAL')}</b></td>
+<td style="padding: 12px; border: 1px solid #ddd;"><b>{get_category_picks(short_picks, 'NEUTRAL')}</b></td>
+</tr>
+<tr>
+<td style="padding: 12px; border: 1px solid #ddd;">❄️ **低機率**</td>
+<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #999;">{get_category_picks(long_picks, 'COLD')}</b></td>
+<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #999;">{get_category_picks(short_picks, 'COLD')}</b></td>
+</tr>
+</table>
+"""
     st.markdown(html_table, unsafe_allow_html=True)
 
 # ==========================================
@@ -570,7 +571,6 @@ elif page == "📊 頻率機率回測實驗室":
                     ## `{hit_nums}`
                     """)
             
-            # ✨ 終極升級：您想要的華麗版「長短線頻率狀態對比表」在這裡！
             with st.expander("🔍 詳細查看：39碼目前各頻率狀態 (雙期數動能對比)"):
                 latest_window_2 = historical_df.tail(test_window_2)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
                 latest_freq_2 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(latest_window_2).value_counts(), fill_value=0).astype(int)
@@ -583,16 +583,15 @@ elif page == "📊 頻率機率回測實驗室":
                 
                 avg_f = test_window * 5 / 39
                 
+                # HTML 標籤再次貼齊最左，避免被判斷成程式碼區塊
                 html_freq_table = f"""
-                <table style="width:100%; border-collapse: collapse; text-align: left; font-size: 16px;">
-                    <tr style="background-color: #f0f2f6;">
-                        <th style="padding: 12px; border: 1px solid #ddd; width: 20%;">短線熱度 ({test_window}期)</th>
-                        <th style="padding: 12px; border: 1px solid #ddd; width: 80%;">號碼分佈 <span style='font-size:13px; font-weight:normal; color:#666;'>&nbsp;*(灰色括號內為 {test_window_2} 期之長線基期次數)*</span></th>
-                    </tr>
-                """
-                
+<table style="width:100%; border-collapse: collapse; text-align: left; font-size: 16px;">
+<tr style="background-color: #f0f2f6;">
+<th style="padding: 12px; border: 1px solid #ddd; width: 20%;">短線熱度 ({test_window}期)</th>
+<th style="padding: 12px; border: 1px solid #ddd; width: 80%;">號碼分佈 <span style='font-size:13px; font-weight:normal; color:#666;'>&nbsp;*(灰色括號內為 {test_window_2} 期之長線基期次數)*</span></th>
+</tr>
+"""
                 for f in sorted(freq_dict.keys(), reverse=True):
-                    # 動態指派圖示與顏色 (越熱越紅，越冷越灰)
                     if f >= avg_f * 1.5: icon, color = "🔥", "#d9534f"
                     elif f >= avg_f: icon, color = "⭐", "#f0ad4e"
                     elif f > 1: icon, color = "⚖️", "#333333"
@@ -602,17 +601,17 @@ elif page == "📊 頻率機率回測實驗室":
                     nums_html = []
                     for n in sorted(freq_dict[f]):
                         long_f = latest_freq_2[n]
-                        # 完美重現您的排版要求：主號碼放大粗體，長線次數灰色小字
                         nums_html.append(f"<span style='display:inline-block; margin-right:15px;'><b style='font-size:18px;'>{n:02d}</b> <span style='color:#888; font-size:13px;'>(長: {long_f}次)</span></span>")
                     
                     nums_str = "".join(nums_html)
                     
+                    # 取消縮排
                     html_freq_table += f"""
-                    <tr>
-                        <td style="padding: 12px; border: 1px solid #ddd; color: {color};"><b>{icon} 出現 {f} 次</b></td>
-                        <td style="padding: 12px; border: 1px solid #ddd;">{nums_str}</td>
-                    </tr>
-                    """
+<tr>
+<td style="padding: 12px; border: 1px solid #ddd; color: {color};"><b>{icon} 出現 {f} 次</b></td>
+<td style="padding: 12px; border: 1px solid #ddd;">{nums_str}</td>
+</tr>
+"""
                 html_freq_table += "</table>"
                 
                 st.markdown(html_freq_table, unsafe_allow_html=True)
