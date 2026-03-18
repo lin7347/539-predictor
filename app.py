@@ -243,6 +243,12 @@ target_draw = historical_df.iloc[-1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
 target_date = historical_df.iloc[-1]['Date']
 target_issue = historical_df.iloc[-1]['Issue']
 
+# 計算「下一期」號碼 (用於歷史回測標示命中綠燈)
+if selected_idx + 1 < len(df):
+    next_draw = df.loc[selected_idx + 1][['N1', 'N2', 'N3', 'N4', 'N5']].tolist()
+else:
+    next_draw = []
+
 nums_long = historical_df.tail(breakout_long_period)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
 s_long = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(nums_long).value_counts(), fill_value=0).astype(int)
 
@@ -283,25 +289,46 @@ if page == "🎯 39碼全解析雷達":
     st.markdown("---")
     st.markdown("### 📊 長短線雙核心深度戰略報表 (實戰動態微調版)")
     
-    def get_category_picks(picks, category_name):
+    # ✨ 升級版動態標籤說明
+    st.markdown("""
+    💡 **圖例說明**： 
+    <span style='color: #d9534f; background-color: #fff5f5; border: 1px solid #d9534f; padding: 2px 6px; border-radius: 4px; font-weight: bold;'>紅底框號碼</span> 代表為**基準日當天**開出之號碼。
+    <span style='color: #3c763d; background-color: #dff0d8; border: 1px solid #4cae4c; padding: 2px 6px; border-radius: 4px; font-weight: bold;'>綠底框號碼</span> 代表成功命中**下一期**實際開獎！(僅限歷史期數回測可見)
+    """, unsafe_allow_html=True)
+    
+    def get_category_picks_html(picks, category_name):
         sorted_picks = sorted(list(set(picks))) if picks else []
-        if category_name == "HOT": return ", ".join([str(p) for p in sorted_picks[:5]]) if sorted_picks else "無"
-        elif category_name == "WARM": return ", ".join([str(p) for p in sorted_picks[5:10]]) if len(sorted_picks) > 5 else "無"
+        sub_list = []
+        if category_name == "HOT": sub_list = sorted_picks[:5]
+        elif category_name == "WARM": sub_list = sorted_picks[5:10] if len(sorted_picks) > 5 else []
         elif category_name == "REPEAT_OR_DEAD":
-            if include_repeat:
-                repeats = [p for p in target_draw if p not in sorted_picks[:10]]
-                return ", ".join([str(p) for p in repeats]) if repeats else "無 (皆已升級為主推)"
-            else: return ", ".join([str(p) for p in target_draw])
+            if include_repeat: sub_list = [p for p in target_draw if p not in sorted_picks[:10]]
+            else: sub_list = target_draw
         elif category_name == "NEUTRAL":
-            others = [p for p in range(1, 40) if p not in sorted_picks[:10] and p not in target_draw and not any(s < p < e for s,e in death_seas)]
-            return ", ".join([str(p) for p in others]) if others else "無"
+            sub_list = [p for p in range(1, 40) if p not in sorted_picks[:10] and p not in target_draw and not any(s < p < e for s,e in death_seas)]
         elif category_name == "COLD":
-            cold = [p for p in range(1, 40) if any(s < p < e for s,e in death_seas) and p not in target_draw and p not in sorted_picks[:10]]
-            return ", ".join([str(p) for p in cold]) if cold else "無"
+            sub_list = [p for p in range(1, 40) if any(s < p < e for s,e in death_seas) and p not in target_draw and p not in sorted_picks[:10]]
+        
+        if not sub_list: return "無"
+        
+        formatted = []
+        for p in sub_list:
+            is_target = p in target_draw
+            is_next = p in next_draw
+            
+            if is_target and is_next:
+                formatted.append(f"<span style='color: #fff; background-color: #8a6d3b; padding: 2px 6px; border-radius: 4px; font-weight:bold;'>{p:02d}</span>")
+            elif is_next:
+                formatted.append(f"<span style='color: #3c763d; background-color: #dff0d8; border: 1px solid #4cae4c; padding: 2px 6px; border-radius: 4px; font-weight:bold;'>{p:02d}</span>")
+            elif is_target:
+                formatted.append(f"<span style='color: #d9534f; background-color: #fff5f5; border: 1px solid #d9534f; padding: 2px 6px; border-radius: 4px; font-weight:bold;'>{p:02d}</span>")
+            else:
+                formatted.append(f"<span style='font-size:16px;'>{p:02d}</span>")
+                
+        return "<span style='line-height: 2.2;'>" + "&nbsp;&nbsp;".join(formatted) + "</span>"
 
     row3_icon = "♻️ **連莊觀察區**<br>*(昨日開出)*" if include_repeat else "💀 **最不可能開出**<br>*(全殺棄子)*"
 
-    # 注意這裡：HTML 標籤必須全部靠左，不能有空白縮排！
     html_table = f"""
 <table style="width:100%; border-collapse: collapse; text-align: left; font-size: 16px;">
 <tr style="background-color: #f0f2f6;">
@@ -311,28 +338,28 @@ if page == "🎯 39碼全解析雷達":
 </tr>
 <tr>
 <td style="padding: 12px; border: 1px solid #ddd;">🔥 **極可能開出**<br>*(必買主支)*</td>
-<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #d9534f; font-size: 18px;">{get_category_picks(long_picks, 'HOT')}</b></td>
-<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #d9534f; font-size: 18px;">{get_category_picks(short_picks, 'HOT')}</b></td>
+<td style="padding: 12px; border: 1px solid #ddd;">{get_category_picks_html(long_picks, 'HOT')}</td>
+<td style="padding: 12px; border: 1px solid #ddd;">{get_category_picks_html(short_picks, 'HOT')}</td>
 </tr>
 <tr>
 <td style="padding: 12px; border: 1px solid #ddd;">⭐ **高機率開出**<br>*(強勢輔助)*</td>
-<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #f0ad4e; font-size: 18px;">{get_category_picks(long_picks, 'WARM')}</b></td>
-<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #f0ad4e; font-size: 18px;">{get_category_picks(short_picks, 'WARM')}</b></td>
+<td style="padding: 12px; border: 1px solid #ddd;">{get_category_picks_html(long_picks, 'WARM')}</td>
+<td style="padding: 12px; border: 1px solid #ddd;">{get_category_picks_html(short_picks, 'WARM')}</td>
 </tr>
 <tr>
 <td style="padding: 12px; border: 1px solid #ddd;">{row3_icon}</td>
-<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #5bc0de; font-size: 18px;">{get_category_picks(long_picks, 'REPEAT_OR_DEAD')}</b></td>
-<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #5bc0de; font-size: 18px;">{get_category_picks(short_picks, 'REPEAT_OR_DEAD')}</b></td>
+<td style="padding: 12px; border: 1px solid #ddd;">{get_category_picks_html(long_picks, 'REPEAT_OR_DEAD')}</td>
+<td style="padding: 12px; border: 1px solid #ddd;">{get_category_picks_html(short_picks, 'REPEAT_OR_DEAD')}</td>
 </tr>
 <tr>
 <td style="padding: 12px; border: 1px solid #ddd;">⚖️ **中等機率**</td>
-<td style="padding: 12px; border: 1px solid #ddd;"><b>{get_category_picks(long_picks, 'NEUTRAL')}</b></td>
-<td style="padding: 12px; border: 1px solid #ddd;"><b>{get_category_picks(short_picks, 'NEUTRAL')}</b></td>
+<td style="padding: 12px; border: 1px solid #ddd;">{get_category_picks_html(long_picks, 'NEUTRAL')}</td>
+<td style="padding: 12px; border: 1px solid #ddd;">{get_category_picks_html(short_picks, 'NEUTRAL')}</td>
 </tr>
 <tr>
 <td style="padding: 12px; border: 1px solid #ddd;">❄️ **低機率**</td>
-<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #999;">{get_category_picks(long_picks, 'COLD')}</b></td>
-<td style="padding: 12px; border: 1px solid #ddd;"><b style="color: #999;">{get_category_picks(short_picks, 'COLD')}</b></td>
+<td style="padding: 12px; border: 1px solid #ddd;">{get_category_picks_html(long_picks, 'COLD')}</td>
+<td style="padding: 12px; border: 1px solid #ddd;">{get_category_picks_html(short_picks, 'COLD')}</td>
 </tr>
 </table>
 """
@@ -455,7 +482,7 @@ elif page == "📈 回測與勝率追蹤":
         st.warning("⚠️ 資料庫目前不足 100 期，無法進行完整回測。")
 
 # ==========================================
-# 🖥️ 頁面 4：📊 頻率機率回測實驗室
+# 🖥️ 頁面 4：📊 頻率機率回測實驗室 (✨ 動能雙色視覺升級版)
 # ==========================================
 elif page == "📊 頻率機率回測實驗室":
     st.title(f"📊 {game_choice} 頻率機率回測實驗室")
@@ -571,7 +598,15 @@ elif page == "📊 頻率機率回測實驗室":
                     ## `{hit_nums}`
                     """)
             
-            with st.expander("🔍 詳細查看：39碼目前各頻率狀態 (雙期數動能對比)"):
+            # ✨ 雙色視覺升級：在頻率表內標出當日開出(紅)與下期命中(綠)
+            with st.expander("🔍 詳細查看：39碼目前各頻率狀態 (視覺標籤升級版)"):
+                
+                st.markdown("""
+                💡 **圖例說明**： 
+                <span style='color: #d9534f; background-color: #fff5f5; border: 1px solid #d9534f; padding: 2px 6px; border-radius: 4px; font-weight: bold;'>紅底框號碼</span> 代表為**基準日當天**開出之號碼，可藉此觀察最新開出號碼落在哪個頻率帶。
+                <span style='color: #3c763d; background-color: #dff0d8; border: 1px solid #4cae4c; padding: 2px 6px; border-radius: 4px; font-weight: bold;'>綠底框號碼</span> 代表成功命中**下一期**實際開獎！(僅限歷史期數回測可見)
+                """, unsafe_allow_html=True)
+                
                 latest_window_2 = historical_df.tail(test_window_2)[['N1', 'N2', 'N3', 'N4', 'N5']].values.flatten()
                 latest_freq_2 = pd.Series(0, index=np.arange(1, 40)).add(pd.Series(latest_window_2).value_counts(), fill_value=0).astype(int)
                 
@@ -583,9 +618,8 @@ elif page == "📊 頻率機率回測實驗室":
                 
                 avg_f = test_window * 5 / 39
                 
-                # HTML 標籤再次貼齊最左，避免被判斷成程式碼區塊
                 html_freq_table = f"""
-<table style="width:100%; border-collapse: collapse; text-align: left; font-size: 16px;">
+<table style="width:100%; border-collapse: collapse; text-align: left; font-size: 16px; line-height: 2.2;">
 <tr style="background-color: #f0f2f6;">
 <th style="padding: 12px; border: 1px solid #ddd; width: 20%;">短線熱度 ({test_window}期)</th>
 <th style="padding: 12px; border: 1px solid #ddd; width: 80%;">號碼分佈 <span style='font-size:13px; font-weight:normal; color:#666;'>&nbsp;*(灰色括號內為 {test_window_2} 期之長線基期次數)*</span></th>
@@ -601,11 +635,21 @@ elif page == "📊 頻率機率回測實驗室":
                     nums_html = []
                     for n in sorted(freq_dict[f]):
                         long_f = latest_freq_2[n]
-                        nums_html.append(f"<span style='display:inline-block; margin-right:15px;'><b style='font-size:18px;'>{n:02d}</b> <span style='color:#888; font-size:13px;'>(長: {long_f}次)</span></span>")
+                        is_target = n in target_draw
+                        is_next = n in next_draw
+                        
+                        # 視覺標籤邏輯判斷
+                        if is_target and is_next:
+                            nums_html.append(f"<span style='display:inline-block; margin-right:15px;'><span style='color: #fff; background-color: #8a6d3b; padding: 2px 6px; border-radius: 4px; font-weight:bold; font-size:18px;'>{n:02d}</span> <span style='color:#888; font-size:13px;'>(長: {long_f}次)</span></span>")
+                        elif is_next:
+                            nums_html.append(f"<span style='display:inline-block; margin-right:15px;'><span style='color: #3c763d; background-color: #dff0d8; border: 1px solid #4cae4c; padding: 2px 6px; border-radius: 4px; font-weight:bold; font-size:18px;'>{n:02d}</span> <span style='color:#888; font-size:13px;'>(長: {long_f}次)</span></span>")
+                        elif is_target:
+                            nums_html.append(f"<span style='display:inline-block; margin-right:15px;'><span style='color: #d9534f; background-color: #fff5f5; border: 1px solid #d9534f; padding: 2px 6px; border-radius: 4px; font-weight:bold; font-size:18px;'>{n:02d}</span> <span style='color:#d9534f; font-size:13px;'>(長: {long_f}次)</span></span>")
+                        else:
+                            nums_html.append(f"<span style='display:inline-block; margin-right:15px;'><b style='font-size:18px;'>{n:02d}</b> <span style='color:#888; font-size:13px;'>(長: {long_f}次)</span></span>")
                     
                     nums_str = "".join(nums_html)
                     
-                    # 取消縮排
                     html_freq_table += f"""
 <tr>
 <td style="padding: 12px; border: 1px solid #ddd; color: {color};"><b>{icon} 出現 {f} 次</b></td>
